@@ -1,0 +1,36 @@
+{
+  "name": "provv",
+  "version": "0.1.0",
+  "description": "Agent skills provision manager — install, link, and manage AI agent skills",
+  "type": "module",
+  "bin": {
+    "provv": "./dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "rolldown -c",
+    "dev": "rolldown -c --watch",
+    "prepublishOnly": "npm run build",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "skills",
+    "agent",
+    "ai",
+    "cli",
+    "prov"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@clack/prompts": "^0.9.1",
+    "commander": "^12.1.0",
+    "picocolors": "^1.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "rolldown": "^1",
+    "typescript": "^5.7"
+  }
+}
