@@ -1,6 +1,6 @@
 # provv — Agent Skills Provision Manager
 
-`provv` installs, links, and manages AI agent skills from a central **master** folder into your projects. Works with any agent that reads `.agents/skills/` (pi, opencode, Claude Code, Cursor, etc.)
+`provv` installs and manages AI agent skills from a central **master** folder into your projects. Works with any agent that reads `.agents/skills/` (pi, opencode, Claude Code, Cursor, etc.)
 
 ```bash
 npm i -g provv
@@ -41,14 +41,12 @@ provv install
 
 ### `provv init`
 
-Scaffold current directory as a master folder. Creates directory structure, lockfiles, and gitignore.
+Scaffold current directory as a master folder.
 
 ```bash
 mkdir ~/my-skills && cd ~/my-skills
 provv init
 ```
-
-**What it does:**
 
 | Action | Details |
 |---|---|
@@ -62,14 +60,13 @@ provv init
 
 ### `provv install [skills...]`
 
-Install skills to master and link to current project. The main workflow.
+Install skills to master and link to current project. The single entry point — handles everything from download to symlink.
 
 ```bash
-provv install                  # Interactive: pick skills, install, link
-provv install caveman          # Skip picker, install caveman directly
+provv install                          # Interactive: pick skills
+provv install caveman                  # Install a known skill directly
+provv install npx skills add <url> --skill <name>  # Install new from skills.sh
 ```
-
-**Flow:**
 
 | Step | What happens |
 |---|---|
@@ -81,54 +78,45 @@ provv install caveman          # Skip picker, install caveman directly
 | Git exclude | Prompts to add `.agents/skills/<name>` to `.git/info/exclude` (default: yes) |
 | Track | Writes link to `provv-links.json` for future cleanup |
 
-**Installing from skills.sh:**
+**Installing a new skill from skills.sh:**
+
+```bash
+provv install npx skills add microsoft/azure-skills --skill azure-ai
+```
+
+Or interactively:
 
 ```bash
 provv install
 # → select "Install from skills.sh..."
-# → paste: npx skills add microsoft/azure-skills --skill azure-ai
-# → or type repo URL + skill name separately
-# → downloads to master → prompts to link → done
+# → paste the npx skills add command or type repo + skill name
 ```
-
----
-
-### `provv link [skills...]`
-
-Symlink an already-installed skill to current project (no download).
-
-```bash
-provv link                     # Interactive: pick from available skills
-provv link caveman             # Link caveman directly
-```
-
-Only skills with actual files on disk are shown. skills.sh skills that haven't been synced are excluded (install them first).
 
 ---
 
 ### `provv unlink [skills...]`
 
-Remove skill symlink(s) from current project.
+Remove skill symlink(s) from current project without touching the master.
 
 ```bash
-provv unlink                   # Interactive: pick linked skills to remove
-provv unlink caveman           # Remove caveman symlink
+provv unlink               # Interactive: pick linked skills
+provv unlink caveman       # Remove caveman symlink
 ```
 
-Also cleans up `.git/info/exclude` and removes the project from `provv-links.json`. Does NOT touch the master.
+Also cleans up `.git/info/exclude` and updates `provv-links.json`.
 
 ---
 
 ### `provv delete [skills...]`
 
-Delete a skill from master entirely. Removes files from master AND all linked symlinks across all projects.
+Delete a skill from master entirely — removes files from master AND all linked symlinks across every project.
 
 ```bash
-provv delete                   # Interactive: pick skills to delete
-provv delete caveman           # Delete caveman from master + all links
+provv delete               # Interactive: pick skills to delete
+provv delete caveman       # Delete caveman from master + all links
 ```
 
-**This is destructive.** Prompts for confirmation before proceeding. Cleans:
+**Destructive.** Prompts for confirmation. Cleans:
 
 | What | Where |
 |---|---|
@@ -144,11 +132,11 @@ provv delete caveman           # Delete caveman from master + all links
 Update skills.sh skills to latest versions in master.
 
 ```bash
-provv update                   # Interactive: pick skills to update
-provv update caveman           # Update specific skill
+provv update               # Interactive: pick skills to update
+provv update caveman       # Update specific skill
 ```
 
-Runs `npx skills update -y` in the master folder. Own skills are not affected (they're git-tracked in your master repo).
+Runs `npx skills update -y` in the master folder. Own skills are unaffected (they're git-tracked).
 
 ---
 
@@ -159,8 +147,6 @@ Show all skills and their link status.
 ```bash
 provv list
 ```
-
-**Output format:**
 
 ```
 ── Your Skills ──
@@ -176,7 +162,7 @@ provv list
 | Indicator | Meaning |
 |---|---|
 | `[✓]` | Downloaded locally (synced) |
-| `[⇣]` | In lockfile but not downloaded (run install) |
+| `[⇣]` | In lockfile but not downloaded (run `provv install`) |
 | `→ linked` | Symlinked to current project (green) |
 | `→ not linked` | Not symlinked anywhere (dimmed) |
 
@@ -187,9 +173,9 @@ provv list
 Show or change the master path.
 
 ```bash
-provv master                   # Show current master path
-provv master set /path         # Point to an existing master folder
-provv master path              # Same as no args
+provv master               # Show current master path
+provv master set /path     # Point to existing master folder
+provv master path          # Same as no args
 ```
 
 ---
@@ -207,19 +193,19 @@ my-skills/
 │   └── another-skill/
 ├── .agents/skills/            # skills.sh downloads (gitignored)
 ├── skills-lock.json           # skills.sh manifest
-├── provv-links.json            # Symlink targets per skill
+├── provv-links.json           # Symlink targets per skill
 ├── .gitignore                 # node_modules, .agents
 ├── package.json
 └── README.md
 ```
 
-**Project folder (after linking a skill):**
+**Project folder (after `provv install`):**
 
 ```
 my-project/
 ├── .agents/skills/
-│   ├── init-docs → ~/my-skills/skills/init-docs       # symlink
-│   └── caveman → ~/my-skills/.agents/skills/caveman   # symlink
+│   ├── init-docs → ~/my-skills/skills/init-docs        # symlink
+│   └── caveman → ~/my-skills/.agents/skills/caveman    # symlink
 ├── .git/info/exclude          # .agents/skills/* appended
 └── ...rest of project
 ```
@@ -232,11 +218,15 @@ Saved to `~/.config/provv/config.json`:
 
 ```json
 {
-  "masterPath": "/home/you/my-skills"
+  "masterPath": "/home/you/my-skills",
+  "gitExclude": "auto-ignore"
 }
 ```
 
-Generated by `provv init` or `provv master set`.
+| Field | Default | Description |
+|---|---|---|
+| `masterPath` | — | Path to your master skills folder |
+| `gitExclude` | `"auto-ignore"` | How to handle symlinks in git: `"auto-ignore"` (silent, default), `"never"` (keep tracked), `"ask"` (prompt each install) |
 
 ---
 

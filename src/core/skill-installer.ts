@@ -1,6 +1,25 @@
 import { execSync } from 'node:child_process';
-import { existsSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+
+function cleanupAgentDirs(masterPath: string): void {
+  try {
+    const entries = readdirSync(masterPath, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory() || !entry.name.startsWith('.')) continue;
+      if (entry.name === '.git' || entry.name === '.agents') continue;
+
+      // Remove any hidden directory that has a skills/ subfolder
+      // (agent-specific dirs created by skills.sh all follow this pattern)
+      const skillsPath = join(masterPath, entry.name, 'skills');
+      if (existsSync(skillsPath)) {
+        rmSync(join(masterPath, entry.name), { recursive: true, force: true });
+      }
+    }
+  } catch {
+    // Silently skip — cleanup is best-effort
+  }
+}
 
 export function installFromSkillsSh(
   masterPath: string,
@@ -19,6 +38,7 @@ export function installFromSkillsSh(
     try {
       const cmd = `npx skills add "${repoUrl}" --skill "${name}" --copy -y 2>&1`;
       execSync(cmd, { cwd: masterPath, stdio: 'inherit' });
+      cleanupAgentDirs(masterPath);
     } catch (err) {
       console.error(`Failed to install ${name}:`, String(err));
       success = false;
@@ -29,6 +49,7 @@ export function installFromSkillsSh(
     try {
       const cmd = `npx skills add "${repoUrl}" --all --copy -y 2>&1`;
       execSync(cmd, { cwd: masterPath, stdio: 'inherit' });
+      cleanupAgentDirs(masterPath);
     } catch (err) {
       console.error(`Failed to install from ${repoUrl}:`, String(err));
       return false;
@@ -49,6 +70,7 @@ export function updateSkillsShSkills(
           cwd: masterPath,
           stdio: 'inherit',
         });
+        cleanupAgentDirs(masterPath);
       } catch (err) {
         console.error(`Failed to update ${name}:`, String(err));
       }
@@ -59,6 +81,7 @@ export function updateSkillsShSkills(
         cwd: masterPath,
         stdio: 'inherit',
       });
+      cleanupAgentDirs(masterPath);
     } catch (err) {
       console.error('Failed to update skills:', String(err));
     }

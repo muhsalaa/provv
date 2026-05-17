@@ -5,7 +5,6 @@ import { Command } from 'commander';
 import { readConfig, writeConfig } from './core/config.js';
 import { initMaster } from './commands/init.js';
 import { installCommand } from './commands/install.js';
-import { linkCommand } from './commands/link.js';
 import { unlinkCommand } from './commands/unlink.js';
 import { deleteCommand } from './commands/delete.js';
 import { updateCommand } from './commands/update.js';
@@ -63,7 +62,6 @@ async function showMainMenu(): Promise<void> {
     message: 'What would you like to do?',
     options: [
       { value: 'install', label: 'Install skill' },
-      { value: 'link', label: 'Link existing skill to current project' },
       { value: 'unlink', label: 'Unlink skill from current project' },
       { value: 'update', label: 'Update skills.sh skills' },
       { value: 'delete', label: 'Delete skill from master' },
@@ -77,9 +75,6 @@ async function showMainMenu(): Promise<void> {
   switch (action) {
     case 'install':
       await installCommand([]);
-      break;
-    case 'link':
-      await linkCommand([]);
       break;
     case 'unlink':
       await unlinkCommand([]);
@@ -129,13 +124,6 @@ program
       }
     }
     await installCommand(fullArgs);
-  });
-
-program
-  .command('link [skills...]')
-  .description('Link already-installed skill(s) to current project')
-  .action(async (skills: string[]) => {
-    await linkCommand(skills ?? []);
   });
 
 program

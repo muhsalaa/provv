@@ -1,5 +1,8 @@
+export type GitExcludeMode = 'auto-ignore' | 'never' | 'ask';
+
 export interface Config {
   masterPath: string;
+  gitExclude?: GitExcludeMode;
 }
 
 export type SkillType = 'own' | 'skills.sh';

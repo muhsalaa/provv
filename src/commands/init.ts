@@ -1,5 +1,5 @@
 import * as p from '@clack/prompts';
-import { existsSync, mkdirSync, writeFileSync, renameSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync, renameSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { writeConfig } from '../core/config.js';
 import { detectFlatSkills } from '../core/master.js';
@@ -37,11 +37,20 @@ export async function initMaster(cwd: string): Promise<void> {
 
   // Create .gitignore
   const gitignorePath = join(cwd, '.gitignore');
+  const requiredPatterns = ['node_modules', '.agents'];
   if (!existsSync(gitignorePath)) {
-    writeFileSync(gitignorePath, 'node_modules\n.agents\n');
+    writeFileSync(gitignorePath, requiredPatterns.join('\n') + '\n');
     p.log.success('Created .gitignore');
   } else {
-    p.log.info('.gitignore already exists — skipping');
+    const content = readFileSync(gitignorePath, 'utf-8');
+    const lines = content.split('\n').map((l) => l.trim());
+    const missing = requiredPatterns.filter((p) => !lines.includes(p));
+    if (missing.length > 0) {
+      writeFileSync(gitignorePath, content + '\n' + missing.join('\n') + '\n');
+      p.log.success(`Appended to .gitignore: ${missing.join(', ')}`);
+    } else {
+      p.log.info('.gitignore already has all required entries');
+    }
   }
 
   // Create skills-lock.json if missing

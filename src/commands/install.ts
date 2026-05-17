@@ -1,7 +1,7 @@
 import * as p from '@clack/prompts';
 import { join } from 'node:path';
 import { existsSync } from 'node:fs';
-import { readConfig } from '../core/config.js';
+import { readConfigWithDefaults } from '../core/config.js';
 import { getAllSkills } from '../core/master.js';
 import { addLink } from '../core/tracking.js';
 import { readLockfile } from '../core/lockfile.js';
@@ -90,8 +90,8 @@ export async function installCommand(skillArgs: string[]): Promise<void> {
   }
 
   // 2. Check master config
-  const config = readConfig();
-  if (!config || !config.masterPath) {
+  const config = readConfigWithDefaults();
+  if (!config.masterPath) {
     p.log.error('No master folder configured.');
     p.log.info('Run `prov init` in your skills repo, or `prov master set <path>`.');
     p.outro('Install cancelled.');
@@ -285,15 +285,20 @@ export async function installCommand(skillArgs: string[]): Promise<void> {
       const targetPath = join(targetProject, '.agents', 'skills', skill.name);
       createSymlink(targetPath, sourcePath);
 
-      // Git exclude
-      const exclude = await confirmContinue(
-        `Exclude ${skill.name} symlink from git in this project?`,
-        true,
-      );
-      if (exclude) {
-        const pattern = `.agents/skills/${skill.name}`;
-        addToGitExclude(targetProject, pattern);
+      // Git exclude — depends on config
+      const gitExclude = config.gitExclude ?? 'auto-ignore';
+      if (gitExclude === 'auto-ignore') {
+        addToGitExclude(targetProject, `.agents/skills/${skill.name}`);
+      } else if (gitExclude === 'ask') {
+        const exclude = await confirmContinue(
+          `Ignore ${skill.name} symlink in git? (won't be committed)`,
+          true,
+        );
+        if (exclude) {
+          addToGitExclude(targetProject, `.agents/skills/${skill.name}`);
+        }
       }
+      // gitExclude === 'never' → skip entirely
 
       // Track
       addLink(masterPath, skill.name, targetProject, skill.type);
