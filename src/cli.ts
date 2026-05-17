@@ -101,7 +101,7 @@ async function showMainMenu(): Promise<void> {
 const program = new Command()
   .name('provv')
   .description('Agent skills provision manager — install, link, and manage AI agent skills')
-  .version('0.1.0');
+  .version('1.0.0');
 
 program
   .command('init')

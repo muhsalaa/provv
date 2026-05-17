@@ -1,6 +1,6 @@
 {
   "name": "provv",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Agent skills provision manager — install, link, and manage AI agent skills",
   "type": "module",
   "bin": {
