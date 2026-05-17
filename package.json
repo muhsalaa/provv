@@ -12,6 +12,8 @@
   "scripts": {
     "build": "rolldown -c",
     "dev": "rolldown -c --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "prepublishOnly": "npm run build",
     "typecheck": "tsc --noEmit"
   },
@@ -20,9 +22,20 @@
     "agent",
     "ai",
     "cli",
-    "prov"
+    "provv"
   ],
   "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/muhsalaa/provv.git"
+  },
+  "bugs": {
+    "url": "https://github.com/muhsalaa/provv/issues"
+  },
+  "homepage": "https://github.com/muhsalaa/provv#readme",
   "dependencies": {
     "@clack/prompts": "^0.9.1",
     "commander": "^12.1.0",
@@ -30,7 +43,9 @@
   },
   "devDependencies": {
     "@types/node": "^22",
+    "execa": "^9.6.1",
     "rolldown": "^1",
-    "typescript": "^5.7"
+    "typescript": "^5.7",
+    "vitest": "^4.1.6"
   }
 }

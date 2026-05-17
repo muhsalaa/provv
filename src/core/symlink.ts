@@ -1,6 +1,5 @@
-import { existsSync, mkdirSync, readFileSync, lstatSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, lstatSync, writeFileSync, symlinkSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
-import { execSync } from 'node:child_process';
 
 function getGitExcludePath(projectPath: string): string | null {
   const gitExclude = join(projectPath, '.git', 'info', 'exclude');
@@ -14,13 +13,11 @@ export function createSymlink(target: string, source: string): void {
     mkdirSync(targetDir, { recursive: true });
   }
 
-  // Use lstat to detect symlinks without following target
+  // Remove existing file/symlink at target
   try {
     const stat = lstatSync(target);
-    if (stat.isSymbolicLink()) {
-      execSync(`unlink "${target}"`);
-    } else {
-      throw new Error(`Target ${target} exists and is not a symlink`);
+    if (stat.isSymbolicLink() || stat.isFile() || stat.isDirectory()) {
+      unlinkSync(target);
     }
   } catch (err: unknown) {
     // ENOENT means path doesn't exist — fine, proceed
@@ -29,14 +26,14 @@ export function createSymlink(target: string, source: string): void {
     }
   }
 
-  execSync(`ln -sf "${source}" "${target}"`);
+  symlinkSync(source, target);
 }
 
 export function removeSymlink(path: string): boolean {
   try {
     const stat = lstatSync(path);
     if (stat.isSymbolicLink()) {
-      execSync(`unlink "${path}"`);
+      unlinkSync(path);
       return true;
     }
     return false;
