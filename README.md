@@ -3,7 +3,7 @@
 `provv` installs and manages AI agent skills from a central **master** folder into your projects. Works with any agent that reads `.agents/skills/` (pi, opencode, Claude Code, Cursor, etc.)
 
 ```bash
-npm i -g provv
+npm i -g @muhsalaa/provv
 ```
 
 ---

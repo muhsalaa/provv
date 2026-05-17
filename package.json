@@ -1,10 +1,10 @@
 {
-  "name": "provv",
+  "name": "@muhsalaa/provv",
   "version": "1.0.0",
   "description": "Agent skills provision manager — install, link, and manage AI agent skills",
   "type": "module",
   "bin": {
-    "provv": "./dist/cli.js"
+    "@muhsalaa/provv": "./dist/cli.js"
   },
   "files": [
     "dist"
@@ -22,7 +22,7 @@
     "agent",
     "ai",
     "cli",
-    "provv"
+    "@muhsalaa/provv"
   ],
   "license": "MIT",
   "engines": {
