@@ -15,13 +15,12 @@ npm i -g provv
 mkdir ~/my-skills && cd ~/my-skills
 provv init
 
-# 2. Point provv to it (or provv init does this automatically)
-provv master set ~/my-skills
-
-# 3. Install + link a skill to your project
+# 2. Install a skill into your project
 cd ~/code/my-project
 provv install
 ```
+
+First time? `provv install` will offer to create or point to a master automatically.
 
 ---
 
@@ -31,9 +30,9 @@ provv install
 |---|---|
 | **Master** | Central folder holding all your skills. Path stored in `~/.config/provv/config.json`. |
 | **Own skill** | A skill directory inside `master/skills/`. Created by you, tracked in git. |
-| **skills.sh skill** | A skill from the [skills.sh](https://skills.sh) ecosystem. Installed via `npx skills add` into `master/.agents/skills/`. |
-| **Target / project** | Any directory with `.git`, `.agents`, `CLAUDE.md`, or `AGENTS.md` — where skills get symlinked. |
-| **Link** | A symlink from `project/.agents/skills/<name>` → `master/skills/<name>` or `master/.agents/skills/<name>`. |
+| **skills.sh skill** | A skill from the [skills.sh](https://skills.sh) ecosystem. Installed via `npx skills add`. |
+| **Target / project** | Any directory with `.git`, `.agents`, `CLAUDE.md`, or `AGENTS.md`. |
+| **Link / symlink** | `project/.agents/skills/<name>` → `master/.../<name>`. |
 
 ---
 
@@ -51,16 +50,18 @@ provv init
 | Action | Details |
 |---|---|
 | Creates `skills/` | Directory for your own skill folders |
-| Creates `.gitignore` | Ignores `node_modules` and `.agents` |
+| Creates / updates `.gitignore` | Adds `node_modules`, `.agents`, `provv-links.json`. Appends missing patterns if file already exists |
 | Creates `skills-lock.json` | Empty lockfile for skills.sh skills |
 | Migrates flat skills | Detects skill folders at root → prompts to move into `skills/` |
 | Writes config | Saves master path to `~/.config/provv/config.json` |
+
+**Detection:** Only flags "already a master" if configured in provv config OR `skills/` has actual skill folders. Just having `skills-lock.json` (from a project) is not enough to block.
 
 ---
 
 ### `provv install [skills...]`
 
-Install skills to master and link to current project. The single entry point — handles everything from download to symlink.
+Install skills to master and link to current project. The single entry point.
 
 ```bash
 provv install                          # Interactive: pick skills
@@ -70,21 +71,22 @@ provv install npx skills add <url> --skill <name>  # Install new from skills.sh
 
 | Step | What happens |
 |---|---|
+| No master? | **Auto-setup** — offers to init or point to existing master |
 | Detect project | Checks cwd for `.git`, `.agents`, `CLAUDE.md`, `AGENTS.md`. Warns if missing. |
 | Read master | Loads own skills from `skills/` and skills.sh skills from `skills-lock.json` |
 | Pick skills | Multiselect from own + skills.sh + "Install from skills.sh..." option |
-| Download (if needed) | For skills.sh skills without files, runs `npx skills add ... --copy -y` in master |
+| Download (if needed) | Runs `npx skills add ... --copy -y` in master. Agent-specific dirs (`.pi/`, `.claude/`, etc.) are **auto-cleaned** afterwards — only `.agents/skills/` is kept |
 | Symlink | Creates `project/.agents/skills/<name>` → `master/.../<name>` |
-| Git exclude | Prompts to add `.agents/skills/<name>` to `.git/info/exclude` (default: yes) |
-| Track | Writes link to `provv-links.json` for future cleanup |
+| Git exclude | Controlled by `gitExclude` config: `auto-ignore` (default, silent), `ask`, `never` |
+| Track | Writes link to `provv-links.json` (gitignored — machine-local) |
 
-**Installing a new skill from skills.sh:**
+**Installing from skills.sh:**
 
 ```bash
 provv install npx skills add microsoft/azure-skills --skill azure-ai
 ```
 
-Or interactively:
+Or via the interactive menu:
 
 ```bash
 provv install
@@ -136,35 +138,48 @@ provv update               # Interactive: pick skills to update
 provv update caveman       # Update specific skill
 ```
 
-Runs `npx skills update -y` in the master folder. Own skills are unaffected (they're git-tracked).
+Runs `npx skills update -y` in the master folder. Agent-specific dirs are auto-cleaned after update. Own skills are unaffected (they're git-tracked).
 
 ---
 
 ### `provv list`
 
-Show all skills and their link status.
+Show all skills and their link status. Context-aware — changes based on where you run it.
 
-```bash
-provv list
-```
+**Inside a project dir:**
 
 ```
-── Your Skills ──
-  init-docs → not linked
-  add-docs → linked           ← green when linked
-  weekly-summary → not linked
+── Linked to this project ──
+  ○ init-docs → linked here                 ← own skill, green
+  ◆ grill-me [✓] → linked here              ← skills.sh synced, green
 
-── skills.sh ──
-  caveman [⇣] → not linked
-  grill-me [✓] → linked       ← green when linked
+── Not linked here ──
+  ○ add-docs → not linked                   ← own, dim
+  ○ weekly-summary → linked elsewhere        ← own, linked to other project
+  ◆ caveman [✓] → not linked                ← skills.sh synced, dim
+  ◆ migrate-oxfmt [⇣] → not linked          ← skills.sh not synced, dim
+  ◆ frontend-design [✓] → ⚠ symlink missing  ← broken, yellow
+```
+
+**Outside a project dir:**
+
+```
+── Available skills ──
+  ○ add-docs → available
+  ◆ grill-me [✓] → available
 ```
 
 | Indicator | Meaning |
 |---|---|
+| `○` | Own skill (created by you, in `skills/`) |
+| `◆` | skills.sh skill (from [skills.sh](https://skills.sh) ecosystem) |
 | `[✓]` | Downloaded locally (synced) |
-| `[⇣]` | In lockfile but not downloaded (run `provv install`) |
-| `→ linked` | Symlinked to current project (green) |
+| `[⇣]` | In lockfile but not yet downloaded |
+| `→ linked here` | Symlinked to current project (green) |
+| `→ linked elsewhere` | Symlinked to other projects |
 | `→ not linked` | Not symlinked anywhere (dimmed) |
+| `→ ⚠ symlink missing` | Tracking says linked but file is gone (yellow, shows fix command) |
+| `→ available` | Outside project context — ready to install |
 
 ---
 
@@ -193,8 +208,8 @@ my-skills/
 │   └── another-skill/
 ├── .agents/skills/            # skills.sh downloads (gitignored)
 ├── skills-lock.json           # skills.sh manifest
-├── provv-links.json           # Symlink targets per skill
-├── .gitignore                 # node_modules, .agents
+├── provv-links.json           # Symlink targets per skill (gitignored)
+├── .gitignore                 # node_modules, .agents, provv-links.json
 ├── package.json
 └── README.md
 ```
@@ -227,6 +242,8 @@ Saved to `~/.config/provv/config.json`:
 |---|---|---|
 | `masterPath` | — | Path to your master skills folder |
 | `gitExclude` | `"auto-ignore"` | How to handle symlinks in git: `"auto-ignore"` (silent, default), `"never"` (keep tracked), `"ask"` (prompt each install) |
+
+**Validation:** Unknown fields and invalid values are caught and warned to stderr. Falls back to defaults safely.
 
 ---
 

@@ -1,7 +1,7 @@
 import * as p from '@clack/prompts';
 import { join } from 'node:path';
 import { existsSync } from 'node:fs';
-import { readConfigWithDefaults } from '../core/config.js';
+import { readConfigWithDefaults, writeConfig } from '../core/config.js';
 import { getAllSkills } from '../core/master.js';
 import { addLink } from '../core/tracking.js';
 import { readLockfile } from '../core/lockfile.js';
@@ -10,6 +10,7 @@ import { installFromSkillsSh } from '../core/skill-installer.js';
 import { detectProject } from '../utils/project.js';
 import { handleCancel, confirmContinue } from '../utils/prompts.js';
 import type { SkillOption } from '../types.js';
+import { initMaster } from './init.js';
 
 async function promptInstallFromSkillsSh(masterPath: string): Promise<string[]> {
   p.log.step('Install from skills.sh');
@@ -92,15 +93,43 @@ export async function installCommand(skillArgs: string[]): Promise<void> {
   // 2. Check master config
   const config = readConfigWithDefaults();
   if (!config.masterPath) {
-    p.log.error('No master folder configured.');
-    p.log.info('Run `prov init` in your skills repo, or `prov master set <path>`.');
-    p.outro('Install cancelled.');
-    return;
+    p.log.warn('No master folder configured.');
+    const setup = await p.select({
+      message: 'First time using provv? Set up your master:',
+      options: [
+        { value: 'init', label: 'Create master in current directory' },
+        { value: 'set', label: 'Point to existing master folder' },
+        { value: 'exit', label: 'Cancel' },
+      ],
+    });
+    if (p.isCancel(setup) || setup === 'exit') {
+      p.outro('Install cancelled.');
+      return;
+    }
+    if (setup === 'init') {
+      await initMaster(process.cwd());
+    } else {
+      const pathResult = await p.text({
+        message: 'Path to existing master folder:',
+        placeholder: '/home/user/my-skills',
+      });
+      if (p.isCancel(pathResult)) {
+        p.outro('Install cancelled.');
+        return;
+      }
+      const resolved = (pathResult as string).startsWith('/')
+        ? (pathResult as string)
+        : join(process.cwd(), pathResult as string);
+      writeConfig({ masterPath: resolved });
+      p.log.success(`Master set to: ${resolved}`);
+    }
   }
 
-  const masterPath = config.masterPath;
-  if (!existsSync(masterPath)) {
-    p.log.error(`Master folder not found: ${masterPath}`);
+  // Re-read config after potential setup
+  const updatedConfig = readConfigWithDefaults();
+  const masterPath = updatedConfig.masterPath;
+  if (!masterPath || !existsSync(masterPath)) {
+    p.log.error('Master folder not found or not configured.');
     p.outro('Install cancelled.');
     return;
   }

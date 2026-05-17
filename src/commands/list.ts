@@ -55,85 +55,70 @@ export async function listCommand(): Promise<void> {
   const cwd = process.cwd();
 
   if (project.isProject) {
-    const own = skills.filter((s) => s.type === 'own');
-    const skillsSh = skills.filter((s) => s.type === 'skills.sh');
+    const linkedHere = skills.filter((s) => {
+      const entry = tracking.skills[s.name];
+      return entry?.linkedTo.includes(cwd);
+    });
+    const notHere = skills.filter(
+      (s) => !tracking.skills[s.name]?.linkedTo.includes(cwd),
+    );
 
-    function printProjectGroup(label: string, group: typeof own): void {
-      if (group.length === 0) return;
-
-      const linkedHere = group.filter((s) => {
-        const entry = tracking.skills[s.name];
-        return entry?.linkedTo.includes(cwd);
-      });
-      const others = group.filter(
-        (s) => !tracking.skills[s.name]?.linkedTo.includes(cwd),
-      );
-
-      if (linkedHere.length > 0) {
-        p.log.info(`── ${label} (linked to this project) ──`);
-        for (const s of linkedHere) {
-          const prefix =
-            s.type === 'skills.sh'
-              ? `${s.name} ${s.synced ? pc.dim('[✓]') : pc.dim('[⇣]')}`
-              : s.name;
-          const health = checkSymlinkHealth(cwd, s.name);
-          const status =
-            health === 'ok'
-              ? pc.green('→ linked here')
-              : pc.yellow(`→ ⚠ symlink ${health} (reinstall: provv install ${s.name})`);
-          console.log(`  ${prefix} ${status}`);
-        }
+    function formatSkillName(s: typeof skills[number]): string {
+      const prefix = pc.dim(s.type === 'own' ? '○' : '◆');
+      if (s.type === 'own') {
+        return `${prefix} ${s.name}`;
       }
+      return `${prefix} ${s.name} ${s.synced ? pc.dim('[✓]') : pc.dim('[⇣]')}`;
+    }
 
-      if (others.length > 0) {
-        p.log.info(`── ${label} (not linked here) ──`);
-        for (const s of others) {
-          const prefix =
-            s.type === 'skills.sh'
-              ? `${s.name} ${s.synced ? pc.dim('[✓]') : pc.dim('[⇣]')}`
-              : s.name;
-          const linkedElsewhere = tracking.skills[s.name]?.linkedTo ?? [];
-          const elsewhereHealthy = linkedElsewhere.filter((t) =>
-            checkSymlinkHealth(t, s.name) === 'ok',
-          );
-          const elsewhereBroken = linkedElsewhere.filter((t) =>
-            checkSymlinkHealth(t, s.name) !== 'ok',
-          );
-
-          let status: string;
-          if (linkedElsewhere.length === 0) {
-            status = pc.dim('→ not linked');
-          } else if (elsewhereBroken.length > 0) {
-            status = pc.yellow(
-              `→ ⚠ ${elsewhereHealthy.length} ok, ${elsewhereBroken.length} broken`,
-            );
-          } else {
-            status = pc.dim(`→ linked to ${linkedElsewhere.length} project(s)`);
-          }
-          console.log(`  ${prefix} ${status}`);
-        }
+    if (linkedHere.length > 0) {
+      p.log.info('── Linked to this project ──');
+      for (const s of linkedHere) {
+        const health = checkSymlinkHealth(cwd, s.name);
+        const status =
+          health === 'ok'
+            ? pc.green('→ linked here')
+            : pc.yellow(`→ ⚠ symlink ${health} (reinstall: provv install ${s.name})`);
+        console.log(`  ${formatSkillName(s)} ${status}`);
       }
     }
 
-    printProjectGroup('Your Skills', own);
-    printProjectGroup('skills.sh', skillsSh);
+    if (notHere.length > 0) {
+      p.log.info('── Not linked here ──');
+      for (const s of notHere) {
+        const linkedElsewhere = tracking.skills[s.name]?.linkedTo ?? [];
+        const elsewhereHealthy = linkedElsewhere.filter((t) =>
+          checkSymlinkHealth(t, s.name) === 'ok',
+        );
+        const elsewhereBroken = linkedElsewhere.filter((t) =>
+          checkSymlinkHealth(t, s.name) !== 'ok',
+        );
+
+        let status: string;
+        if (linkedElsewhere.length === 0) {
+          status = pc.dim('→ not linked');
+        } else if (elsewhereBroken.length > 0) {
+          status = pc.yellow(
+            `→ ⚠ ${elsewhereHealthy.length} ok, ${elsewhereBroken.length} broken`,
+          );
+        } else {
+          status = pc.dim(`→ linked to ${linkedElsewhere.length} project(s)`);
+        }
+        console.log(`  ${formatSkillName(s)} ${status}`);
+      }
+    }
   } else {
     const own = skills.filter((s) => s.type === 'own');
     const skillsSh = skills.filter((s) => s.type === 'skills.sh');
 
-    if (own.length > 0) {
-      p.log.info('── Your Skills ──');
-      for (const s of own) {
-        console.log(`  ${s.name} ${pc.dim('→ available')}`);
-      }
-    }
-
-    if (skillsSh.length > 0) {
-      p.log.info('── skills.sh ──');
-      for (const s of skillsSh) {
-        const status = s.synced ? pc.dim('[✓]') : pc.dim('[⇣]');
-        console.log(`  ${s.name} ${status} ${pc.dim('→ available')}`);
-      }
+    p.log.info('── Available skills ──');
+    for (const s of skills) {
+      const prefix = pc.dim(s.type === 'own' ? '○' : '◆');
+      const badge =
+        s.type === 'skills.sh'
+          ? ` ${s.synced ? pc.dim('[✓]') : pc.dim('[⇣]')}`
+          : '';
+      console.log(`  ${prefix} ${s.name}${badge} ${pc.dim('→ available')}`);
     }
   }
 

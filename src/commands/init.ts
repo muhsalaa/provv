@@ -2,16 +2,16 @@ import * as p from '@clack/prompts';
 import { existsSync, mkdirSync, writeFileSync, renameSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { writeConfig } from '../core/config.js';
-import { detectFlatSkills } from '../core/master.js';
+import { detectFlatSkills, isMaster } from '../core/master.js';
 import { handleCancel } from '../utils/prompts.js';
 import { getTrackingPath } from '../core/tracking.js';
 
 export async function initMaster(cwd: string): Promise<void> {
   p.intro('Prov Master Init');
 
-  const alreadyMaster = existsSync(join(cwd, 'skills-lock.json'));
+  const alreadyMaster = isMaster(cwd);
   if (alreadyMaster) {
-    p.log.warn('This folder is already a master (skills-lock.json found).');
+    p.log.warn('This folder is already configured as a master.');
     const reconfirm = await p.confirm({
       message: 'Re-init anyway? (recreates config, preserves existing files)',
       active: 'Yes',
@@ -37,7 +37,7 @@ export async function initMaster(cwd: string): Promise<void> {
 
   // Create .gitignore
   const gitignorePath = join(cwd, '.gitignore');
-  const requiredPatterns = ['node_modules', '.agents'];
+  const requiredPatterns = ['node_modules', '.agents', 'provv-links.json'];
   if (!existsSync(gitignorePath)) {
     writeFileSync(gitignorePath, requiredPatterns.join('\n') + '\n');
     p.log.success('Created .gitignore');
