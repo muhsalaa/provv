@@ -5,14 +5,14 @@ export { p };
 export function handleCancel<T>(value: T | symbol): value is symbol {
   if (p.isCancel(value)) {
     p.cancel('Cancelled');
-    process.exit(0);
+    process.exit(1);
   }
   return false;
 }
 
 export function cancelExit(): never {
   p.cancel('Cancelled');
-  process.exit(0);
+  process.exit(1);
 }
 
 export async function confirmContinue(message: string, defaultValue = false): Promise<boolean> {

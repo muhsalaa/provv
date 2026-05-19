@@ -33,6 +33,7 @@ export function installFromSkillsSh(
       execSync(`npx skills add "${repoUrl}" --skill "${name}" --copy -y`, {
         cwd: masterPath,
         stdio: 'pipe',
+        timeout: 60_000,
       });
       cleanupAgentDirs(masterPath);
     } catch (err) {
@@ -46,6 +47,7 @@ export function installFromSkillsSh(
       execSync(`npx skills add "${repoUrl}" --all --copy -y`, {
         cwd: masterPath,
         stdio: 'pipe',
+        timeout: 60_000,
       });
       cleanupAgentDirs(masterPath);
     } catch (err) {
@@ -67,6 +69,7 @@ export function updateSkillsShSkills(
         execSync(`npx skills update "${name}" -y`, {
           cwd: masterPath,
           stdio: 'pipe',
+          timeout: 60_000,
         });
         cleanupAgentDirs(masterPath);
       } catch (err) {
@@ -78,6 +81,7 @@ export function updateSkillsShSkills(
       execSync('npx skills update -y', {
         cwd: masterPath,
         stdio: 'pipe',
+        timeout: 60_000,
       });
       cleanupAgentDirs(masterPath);
     } catch (err) {

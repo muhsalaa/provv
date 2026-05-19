@@ -3,9 +3,9 @@ import { join } from 'node:path';
 import { existsSync } from 'node:fs';
 import { readConfigWithDefaults, writeConfig } from '../core/config.js';
 import { getAllSkills } from '../core/master.js';
-import { addLink } from '../core/tracking.js';
+import { addLink, removeLink } from '../core/tracking.js';
 import { readLockfile } from '../core/lockfile.js';
-import { createSymlink, addToGitExclude } from '../core/symlink.js';
+import { createSymlink, removeSymlink, addToGitExclude, removeFromGitExclude } from '../core/symlink.js';
 import { installFromSkillsSh } from '../core/skill-installer.js';
 import { detectProject } from '../utils/project.js';
 import { handleCancel, confirmContinue } from '../utils/prompts.js';
@@ -322,10 +322,15 @@ export async function installCommand(skillArgs: string[]): Promise<void> {
   // 4. Process each skill
   const targetProject = process.cwd();
   const results: { name: string; ok: boolean; msg: string }[] = [];
+  // Track committed skills so we can roll them back on any failure
+  const committed: { name: string; undo: () => void }[] = [];
 
   for (const skill of selectedSkills) {
     const s = p.spinner();
     s.start(`Processing ${skill.name}...`);
+
+    // Per-skill rollback stack — completed operations to undo if this skill fails
+    const perSkillRollback: (() => void)[] = [];
 
     try {
       let sourcePath: string;
@@ -341,11 +346,24 @@ export async function installCommand(skillArgs: string[]): Promise<void> {
           const lockfile = readLockfile(masterPath);
           const entry = lockfile?.skills[skill.name];
           if (entry) {
-            installFromSkillsSh(masterPath, entry.source, [skill.name]);
+            const ok = installFromSkillsSh(masterPath, entry.source, [skill.name]);
+            if (!ok) {
+              results.push({ name: skill.name, ok: false, msg: 'Download failed' });
+              s.stop('Failed');
+              // Rollback already-committed skills
+              for (const c of committed.slice().reverse()) {
+                try { c.undo(); } catch { /* best-effort */ }
+              }
+              break;
+            }
           } else {
             results.push({ name: skill.name, ok: false, msg: 'Source not found in lockfile' });
             s.stop('Failed');
-            continue;
+            // Rollback already-committed skills
+            for (const c of committed.slice().reverse()) {
+              try { c.undo(); } catch { /* best-effort */ }
+            }
+            break;
           }
         }
         sourcePath = skillsShDir;
@@ -358,11 +376,13 @@ export async function installCommand(skillArgs: string[]): Promise<void> {
         // Symlink
         const targetPath = join(targetProject, '.agents', 'skills', skill.name);
         createSymlink(targetPath, sourcePath);
+        perSkillRollback.push(() => { try { removeSymlink(targetPath); } catch { /* best-effort */ } });
 
         // Git exclude — depends on config
         const gitExclude = config.gitExclude ?? 'auto-ignore';
         if (gitExclude === 'auto-ignore') {
           addToGitExclude(targetProject, `.agents/skills/${skill.name}`);
+          perSkillRollback.push(() => { try { removeFromGitExclude(targetProject, `.agents/skills/${skill.name}`); } catch { /* best-effort */ } });
         } else if (gitExclude === 'ask') {
           const exclude = await confirmContinue(
             `Ignore ${skill.name} symlink in git? (won't be committed)`,
@@ -370,11 +390,19 @@ export async function installCommand(skillArgs: string[]): Promise<void> {
           );
           if (exclude) {
             addToGitExclude(targetProject, `.agents/skills/${skill.name}`);
+            perSkillRollback.push(() => { try { removeFromGitExclude(targetProject, `.agents/skills/${skill.name}`); } catch { /* best-effort */ } });
           }
         }
 
         // Track
         addLink(masterPath, skill.name, targetProject, skill.type);
+        perSkillRollback.push(() => removeLink(masterPath, skill.name, targetProject));
+
+        // Commit — if any later skill fails, rollback all committed skills
+        committed.push({
+          name: skill.name,
+          undo: () => { for (const fn of perSkillRollback.slice().reverse()) { try { fn(); } catch { /* best-effort */ } } },
+        });
 
         s.stop('Done');
         results.push({ name: skill.name, ok: true, msg: 'Installed and linked' });
@@ -383,8 +411,17 @@ export async function installCommand(skillArgs: string[]): Promise<void> {
         results.push({ name: skill.name, ok: true, msg: 'Downloaded to master' });
       }
     } catch (err) {
+      // Rollback current skill's partial progress
+      for (const fn of perSkillRollback.slice().reverse()) {
+        try { fn(); } catch { /* best-effort */ }
+      }
+      // Rollback all previously committed skills
+      for (const c of committed.slice().reverse()) {
+        try { c.undo(); } catch { /* best-effort */ }
+      }
       s.stop('Error');
       results.push({ name: skill.name, ok: false, msg: String(err) });
+      break; // Stop — state is clean, user can retry
     }
   }
 
