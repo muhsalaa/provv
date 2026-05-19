@@ -1,6 +1,7 @@
 import { execSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+import { readLockfile, addSkillToLockfile } from './lockfile.js';
 
 function cleanupAgentDirs(masterPath: string): void {
   try {
@@ -36,6 +37,17 @@ export function installFromSkillsSh(
         timeout: 60_000,
       });
       cleanupAgentDirs(masterPath);
+
+      // Verify lockfile was written
+      const lockfile = readLockfile(masterPath);
+      if (!lockfile || !lockfile.skills[name]) {
+        console.warn(`⚠ ${name}: lockfile entry missing after install — adding stub`);
+        addSkillToLockfile(masterPath, name, {
+          source: repoUrl,
+          sourceType: 'skills.sh',
+          computedHash: '',
+        });
+      }
     } catch (err) {
       console.error(`Failed to install ${name}:`, String(err));
       success = false;

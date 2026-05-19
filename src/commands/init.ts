@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, writeFileSync, renameSync, readFileSync } from '
 import { join } from 'node:path';
 import { writeConfig } from '../core/config.js';
 import { detectFlatSkills, isMaster } from '../core/master.js';
-import { handleCancel } from '../utils/prompts.js';
+
 import { getTrackingPath } from '../core/tracking.js';
 
 export async function initMaster(cwd: string): Promise<void> {

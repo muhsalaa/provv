@@ -1,4 +1,5 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { readFileSync, existsSync, mkdirSync } from 'node:fs';
+import { atomicWriteSync } from './fs-utils.js';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { Config, GitExcludeMode } from '../types.js';
@@ -61,7 +62,7 @@ export function writeConfig(config: Config): void {
   if (!existsSync(CONFIG_DIR)) {
     mkdirSync(CONFIG_DIR, { recursive: true });
   }
-  writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2) + '\n');
+  atomicWriteSync(CONFIG_PATH, JSON.stringify(config, null, 2) + '\n');
 }
 
 export function ensureConfigDir(): void {

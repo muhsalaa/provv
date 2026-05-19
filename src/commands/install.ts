@@ -374,6 +374,15 @@ export async function installCommand(skillArgs: string[]): Promise<void> {
           }
         }
         sourcePath = skillsShDir;
+        // Safety: if download succeeded but dir is missing, fail early
+        if (!existsSync(sourcePath)) {
+          results.push({ name: skill.name, ok: false, msg: 'Skill directory missing after download' });
+          s.stop('Failed');
+          for (const c of committed.slice().reverse()) {
+            try { c.undo(); } catch { /* best-effort */ }
+          }
+          break;
+        }
       }
 
       // When in master: download only, no self-symlink
@@ -388,7 +397,9 @@ export async function installCommand(skillArgs: string[]): Promise<void> {
         // Git exclude — depends on config
         const gitExclude = updatedConfig.gitExclude ?? 'auto-ignore';
         if (gitExclude === 'auto-ignore') {
-          addToGitExclude(targetProject, `.agents/skills/${skill.name}`);
+          if (!addToGitExclude(targetProject, `.agents/skills/${skill.name}`)) {
+            p.log.warn(`Could not git-ignore ${skill.name} — no .git/info/exclude found`);
+          }
           perSkillRollback.push(() => { try { removeFromGitExclude(targetProject, `.agents/skills/${skill.name}`); } catch { /* best-effort */ } });
         } else if (gitExclude === 'ask') {
           const exclude = await confirmContinue(
@@ -396,7 +407,9 @@ export async function installCommand(skillArgs: string[]): Promise<void> {
             true,
           );
           if (exclude) {
-            addToGitExclude(targetProject, `.agents/skills/${skill.name}`);
+            if (!addToGitExclude(targetProject, `.agents/skills/${skill.name}`)) {
+              p.log.warn(`Could not git-ignore ${skill.name} — no .git/info/exclude found`);
+            }
             perSkillRollback.push(() => { try { removeFromGitExclude(targetProject, `.agents/skills/${skill.name}`); } catch { /* best-effort */ } });
           }
         }

@@ -1,4 +1,5 @@
-import { readFileSync, writeFileSync, existsSync, lstatSync } from 'node:fs';
+import { readFileSync, existsSync, lstatSync } from 'node:fs';
+import { atomicWriteSync } from './fs-utils.js';
 import { join } from 'node:path';
 import type { TrackingFile, TrackingEntry, SkillType } from '../types.js';
 
@@ -21,7 +22,7 @@ export function readTracking(masterPath: string): TrackingFile {
 
 function writeTracking(masterPath: string, data: TrackingFile): void {
   const path = getTrackingPath(masterPath);
-  writeFileSync(path, JSON.stringify(data, null, 2) + '\n');
+  atomicWriteSync(path, JSON.stringify(data, null, 2) + '\n');
 }
 
 export function addLink(

@@ -3,7 +3,6 @@ import { existsSync } from 'node:fs';
 import { readConfig } from '../core/config.js';
 import { discoverSkillsShSkills } from '../core/master.js';
 import { updateSkillsShSkills } from '../core/skill-installer.js';
-import { handleCancel } from '../utils/prompts.js';
 
 export async function updateCommand(skillArgs: string[]): Promise<void> {
   p.intro('Prov Update');

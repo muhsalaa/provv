@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { readConfig } from '../core/config.js';
 import { removeAllLinks } from '../core/tracking.js';
 import { removeSkillFromLockfile } from '../core/lockfile.js';
-import { removeSymlink } from '../core/symlink.js';
+import { removeSymlink, removeFromGitExclude } from '../core/symlink.js';
 import { getAllSkills } from '../core/master.js';
 
 export async function deleteCommand(skillArgs: string[]): Promise<void> {
@@ -70,11 +70,12 @@ export async function deleteCommand(skillArgs: string[]): Promise<void> {
     s.start(`Deleting ${name}...`);
 
     try {
-      // 1. Remove all linked symlinks
+      // 1. Remove all linked symlinks and git exclude entries
       const linkedTargets = removeAllLinks(masterPath, name);
       for (const target of linkedTargets) {
         const symlinkPath = join(target, '.agents', 'skills', name);
         removeSymlink(symlinkPath);
+        removeFromGitExclude(target, `.agents/skills/${name}`);
       }
 
       // 2. Remove from skills-lock.json (for skills.sh skills)

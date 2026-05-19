@@ -6,6 +6,7 @@ import { join } from 'node:path';
 // Use inline string in mock factory to avoid vi.mock hoisting issues with const refs
 vi.mock('node:os', () => ({
   homedir: () => '/tmp/provv-test-home-config',
+  tmpdir: () => '/tmp',
 }));
 
 beforeEach(() => cleanConfig('/tmp/provv-test-home-config'));

@@ -1,4 +1,5 @@
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
+import { atomicWriteSync } from './fs-utils.js';
 import { join } from 'node:path';
 import type { SkillsLockFile, SkillsLockSkill } from '../types.js';
 
@@ -21,7 +22,7 @@ export function readLockfile(masterPath: string): SkillsLockFile | null {
 
 export function writeLockfile(masterPath: string, data: SkillsLockFile): void {
   const path = getLockfilePath(masterPath);
-  writeFileSync(path, JSON.stringify(data, null, 2) + '\n');
+  atomicWriteSync(path, JSON.stringify(data, null, 2) + '\n');
 }
 
 export function removeSkillFromLockfile(masterPath: string, skillName: string): boolean {
