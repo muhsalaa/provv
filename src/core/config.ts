@@ -4,7 +4,8 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { Config, GitExcludeMode } from '../types.js';
 
-const CONFIG_DIR = join(homedir(), '.config', 'provv');
+const configBase = process.env.XDG_CONFIG_HOME || join(homedir(), '.config');
+const CONFIG_DIR = join(configBase, 'provv');
 const CONFIG_PATH = join(CONFIG_DIR, 'config.json');
 
 const VALID_FIELDS = new Set(['masterPath', 'gitExclude']);

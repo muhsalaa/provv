@@ -22,18 +22,6 @@ export function isMaster(path: string): boolean {
   return false;
 }
 
-export function validateMaster(path: string): string[] {
-  const errors: string[] = [];
-  if (!existsSync(path)) {
-    errors.push(`Master path does not exist: ${path}`);
-    return errors;
-  }
-  if (!existsSync(join(path, 'skills')) && !existsSync(join(path, 'skills-lock.json'))) {
-    errors.push(`Not a valid master: missing both skills/ directory and skills-lock.json`);
-  }
-  return errors;
-}
-
 export function discoverOwnSkills(masterPath: string): SkillOption[] {
   const skillsDir = join(masterPath, 'skills');
   if (!existsSync(skillsDir)) return [];

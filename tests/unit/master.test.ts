@@ -1,14 +1,16 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, afterAll } from 'vitest';
 import { createTempDir, cleanupDir, createOwnSkill, createLockfile, cleanConfig, writeJson } from '../helpers.js';
 import { join } from 'node:path';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { rmSync, existsSync } from 'node:fs';
 
-const TEST_HOME = '/tmp/provv-test-home-master';
+const TEST_HOME = `/tmp/provv-test-${Math.random().toString(36).slice(2, 10)}`;
 
 vi.mock('node:os', () => ({
   homedir: () => TEST_HOME,
 }));
+
+afterAll(() => { try { rmSync(TEST_HOME, { recursive: true, force: true }); } catch {} });
 
 let tmpDir = '';
 

@@ -1,16 +1,19 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, afterAll } from 'vitest';
 import { cleanConfig } from '../helpers.js';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 
-// Use inline string in mock factory to avoid vi.mock hoisting issues with const refs
+// Unique temp home per test run — no external refs so vi.mock hoisting is safe
+const TEST_HOME = `/tmp/provv-test-${Math.random().toString(36).slice(2, 10)}`;
+
 vi.mock('node:os', () => ({
-  homedir: () => '/tmp/provv-test-home-config',
+  homedir: () => TEST_HOME,
   tmpdir: () => '/tmp',
 }));
 
-beforeEach(() => cleanConfig('/tmp/provv-test-home-config'));
-afterEach(() => cleanConfig('/tmp/provv-test-home-config'));
+afterAll(() => { try { rmSync(TEST_HOME, { recursive: true, force: true }); } catch {} });
+beforeEach(() => cleanConfig(TEST_HOME));
+afterEach(() => cleanConfig(TEST_HOME));
 
 describe('config', () => {
   it('returns null when no config exists', async () => {
@@ -35,7 +38,7 @@ describe('config', () => {
 
   it('returns null for malformed JSON', async () => {
     const { getConfigPath } = await import('../../src/core/config.js');
-    mkdirSync('/tmp/provv-test-home-config/.config/provv', { recursive: true });
+    mkdirSync(join(TEST_HOME, '.config', 'provv'), { recursive: true });
     writeFileSync(getConfigPath(), 'not valid json');
     const { readConfig } = await import('../../src/core/config.js');
     expect(readConfig()).toBeNull();
@@ -43,7 +46,7 @@ describe('config', () => {
 
   it('warns on unknown config fields', async () => {
     const { getConfigPath } = await import('../../src/core/config.js');
-    mkdirSync('/tmp/provv-test-home-config/.config/provv', { recursive: true });
+    mkdirSync(join(TEST_HOME, '.config', 'provv'), { recursive: true });
     writeFileSync(getConfigPath(), JSON.stringify({
       masterPath: '/tmp/master',
       unknownField: 'blah',
@@ -60,7 +63,7 @@ describe('config', () => {
 
   it('warns on invalid gitExclude value', async () => {
     const { getConfigPath } = await import('../../src/core/config.js');
-    mkdirSync('/tmp/provv-test-home-config/.config/provv', { recursive: true });
+    mkdirSync(join(TEST_HOME, '.config', 'provv'), { recursive: true });
     writeFileSync(getConfigPath(), JSON.stringify({
       masterPath: '/tmp/master',
       gitExclude: 'never-never',
