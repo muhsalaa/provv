@@ -73,40 +73,49 @@ describe('tracking', () => {
   describe('reconcileTracking', () => {
     it('removes stale entries for missing symlinks', async () => {
       const { addLink, reconcileTracking, readTracking } = await import('../../src/core/tracking.js');
-      const { mkdirSync, symlinkSync, writeFileSync } = await import('node:fs');
+      const { mkdirSync, symlinkSync, writeFileSync, rmSync } = await import('node:fs');
+      const { createTempDir, cleanupDir } = await import('../helpers.js');
       // Add a link to a real project with a real symlink
-      const projectDir = join(masterDir, '..', 'fake-project');
-      mkdirSync(projectDir, { recursive: true });
-      mkdirSync(join(projectDir, '.agents', 'skills'), { recursive: true });
-      const target = join(projectDir, '.agents', 'skills', 'good-skill');
-      writeFileSync(join(masterDir, 'skillsrc'), 'hello');
-      symlinkSync(join(masterDir, 'skillsrc'), target);
+      const projectDir = createTempDir();
+      try {
+        mkdirSync(join(projectDir, '.agents', 'skills'), { recursive: true });
+        const target = join(projectDir, '.agents', 'skills', 'good-skill');
+        writeFileSync(join(masterDir, 'skillsrc'), 'hello');
+        symlinkSync(join(masterDir, 'skillsrc'), target);
 
-      addLink(masterDir, 'good-skill', projectDir, 'own');
-      addLink(masterDir, 'stale-skill', '/tmp/non-existent-project', 'own');
+        addLink(masterDir, 'good-skill', projectDir, 'own');
+        addLink(masterDir, 'stale-skill', '/tmp/non-existent-project', 'own');
 
-      const { staleRemoved, skills } = reconcileTracking(masterDir);
-      expect(staleRemoved).toBe(1);
-      expect(skills).toBe(1);
+        const { staleRemoved, skills } = reconcileTracking(masterDir);
+        expect(staleRemoved).toBe(1);
+        expect(skills).toBe(1);
 
-      const tracking = readTracking(masterDir);
-      expect(tracking.skills['good-skill']).toBeDefined();
-      expect(tracking.skills['stale-skill']).toBeUndefined();
+        const tracking = readTracking(masterDir);
+        expect(tracking.skills['good-skill']).toBeDefined();
+        expect(tracking.skills['stale-skill']).toBeUndefined();
+      } finally {
+        cleanupDir(projectDir);
+      }
     });
 
     it('does nothing when all tracking entries are valid', async () => {
       const { addLink, reconcileTracking } = await import('../../src/core/tracking.js');
-      const { mkdirSync, symlinkSync, writeFileSync } = await import('node:fs');
-      const projectDir = join(masterDir, '..', 'valid-proj');
-      mkdirSync(join(projectDir, '.agents', 'skills'), { recursive: true });
-      writeFileSync(join(masterDir, 'src'), 'data');
-      symlinkSync(join(masterDir, 'src'), join(projectDir, '.agents', 'skills', 'v'));
+      const { mkdirSync, symlinkSync, writeFileSync, rmSync } = await import('node:fs');
+      const { createTempDir, cleanupDir } = await import('../helpers.js');
+      const projectDir = createTempDir();
+      try {
+        mkdirSync(join(projectDir, '.agents', 'skills'), { recursive: true });
+        writeFileSync(join(masterDir, 'src'), 'data');
+        symlinkSync(join(masterDir, 'src'), join(projectDir, '.agents', 'skills', 'v'));
 
-      addLink(masterDir, 'v', projectDir, 'own');
+        addLink(masterDir, 'v', projectDir, 'own');
 
-      const { staleRemoved, skills } = reconcileTracking(masterDir);
-      expect(staleRemoved).toBe(0);
-      expect(skills).toBe(1);
+        const { staleRemoved, skills } = reconcileTracking(masterDir);
+        expect(staleRemoved).toBe(0);
+        expect(skills).toBe(1);
+      } finally {
+        cleanupDir(projectDir);
+      }
     });
 
     it('does nothing on empty tracking', async () => {

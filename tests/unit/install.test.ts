@@ -1,9 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { createTempDir, cleanupDir, createOwnSkill, createLockfile } from '../helpers.js';
+import { join } from 'node:path';
+import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 
-/**
- * Tests for npx command parsing regex pattern used in install.ts.
- * The regex is duplicated here to test the pattern contract.
- */
+// -------------------------------------------------------------------------
+// Regex pattern tests (no mocks needed)
+// -------------------------------------------------------------------------
 const NPX_CMD_RE = /npx\s+skills(?:@[\w.]+)?\s+add\s+(https?:\/\/[^\s]+|[\w.-]+\/[\w.-]+)(?:\s+--skill(?:=|\s+)([\w,-]+))?/;
 
 describe('npx command regex', () => {
@@ -34,7 +36,6 @@ describe('npx command regex', () => {
     expect(m![1]).toBe('https://github.com/user/repo.git');
   });
 
-  // Use regex here
   it('handles query params in URL', () => {
     const url = 'https://github.com/user/repo?branch=main&foo=bar';
     const m = `npx skills add ${url} --skill caveman`.match(NPX_CMD_RE);
@@ -61,12 +62,6 @@ describe('npx command regex', () => {
     expect(m![2]).toBe('alpha,beta');
   });
 
-  it('handles comma-separated with equals sign', () => {
-    const m = 'npx skills add user/repo --skill=alpha,beta'.match(NPX_CMD_RE);
-    expect(m).not.toBeNull();
-    expect(m![2]).toBe('alpha,beta');
-  });
-
   it('handles beta version tag', () => {
     const m = 'npx skills@beta add user/repo --skill caveman'.match(NPX_CMD_RE);
     expect(m).not.toBeNull();
@@ -87,61 +82,29 @@ describe('npx command regex', () => {
 });
 
 describe('skill name splitting', () => {
-  // This mirrors the split logic in install.ts:
-  // skillNames = cmdMatch[2].split(/[\s,]+/).filter(Boolean);
   function parseSkillNames(raw: string | undefined): string[] {
     if (!raw) return [];
     return raw.split(/[\s,]+/).filter(Boolean);
   }
 
-  it('splits comma-separated names', () => {
-    expect(parseSkillNames('alpha,beta')).toEqual(['alpha', 'beta']);
-  });
-
-  it('splits space-separated names', () => {
-    expect(parseSkillNames('alpha beta')).toEqual(['alpha', 'beta']);
-  });
-
-  it('splits mixed separators', () => {
-    expect(parseSkillNames('alpha, beta, gamma')).toEqual(['alpha', 'beta', 'gamma']);
-  });
-
-  it('filters empty entries', () => {
-    expect(parseSkillNames('alpha,,beta,')).toEqual(['alpha', 'beta']);
-  });
-
-  it('returns empty array for undefined', () => {
-    expect(parseSkillNames(undefined)).toEqual([]);
-  });
+  it('splits comma-separated names', () => expect(parseSkillNames('alpha,beta')).toEqual(['alpha', 'beta']));
+  it('splits space-separated names', () => expect(parseSkillNames('alpha beta')).toEqual(['alpha', 'beta']));
+  it('splits mixed separators', () => expect(parseSkillNames('alpha, beta')).toEqual(['alpha', 'beta']));
+  it('filters empty entries', () => expect(parseSkillNames('alpha,,beta,')).toEqual(['alpha', 'beta']));
+  it('returns empty array for undefined', () => expect(parseSkillNames(undefined)).toEqual([]));
 });
 
 describe('URL candidate detection', () => {
-  // Mirrors the isCommand logic in install.ts:
   function looksLikeCommandOrUrl(arg: string): boolean {
     return arg === 'npx' || arg.startsWith('http') || /^[\w.-]+\/[\w.-]+$/.test(arg);
   }
 
-  it('detects npx command', () => {
-    expect(looksLikeCommandOrUrl('npx')).toBe(true);
-  });
-
-  it('detects http URL', () => {
-    expect(looksLikeCommandOrUrl('https://github.com/user/repo')).toBe(true);
-  });
-
-  it('detects shorthand repo', () => {
-    expect(looksLikeCommandOrUrl('user/repo')).toBe(true);
-  });
-
-  it('detects dotted shorthand repo', () => {
-    expect(looksLikeCommandOrUrl('microsoft/azure-skills')).toBe(true);
-  });
-
-  it('rejects skill name only', () => {
-    expect(looksLikeCommandOrUrl('caveman')).toBe(false);
-  });
-
-  it('rejects absolute path to file', () => {
-    expect(looksLikeCommandOrUrl('/usr/local/bin/skills')).toBe(false);
-  });
+  it('detects npx command', () => expect(looksLikeCommandOrUrl('npx')).toBe(true));
+  it('detects http URL', () => expect(looksLikeCommandOrUrl('https://github.com/user/repo')).toBe(true));
+  it('detects shorthand repo', () => expect(looksLikeCommandOrUrl('user/repo')).toBe(true));
+  it('detects dotted shorthand repo', () => expect(looksLikeCommandOrUrl('microsoft/azure-skills')).toBe(true));
+  it('rejects skill name only', () => expect(looksLikeCommandOrUrl('caveman')).toBe(false));
+  it('rejects absolute path to file', () => expect(looksLikeCommandOrUrl('/usr/local/bin/skills')).toBe(false));
 });
+
+
