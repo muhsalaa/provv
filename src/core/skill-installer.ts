@@ -1,5 +1,5 @@
 import { execSync } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 
 function cleanupAgentDirs(masterPath: string): void {
@@ -8,16 +8,10 @@ function cleanupAgentDirs(masterPath: string): void {
     for (const entry of entries) {
       if (!entry.isDirectory() || !entry.name.startsWith('.')) continue;
       if (entry.name === '.git' || entry.name === '.agents') continue;
-
-      // Remove any hidden directory that has a skills/ subfolder
-      // (agent-specific dirs created by skills.sh all follow this pattern)
-      const skillsPath = join(masterPath, entry.name, 'skills');
-      if (existsSync(skillsPath)) {
-        rmSync(join(masterPath, entry.name), { recursive: true, force: true });
-      }
+      rmSync(join(masterPath, entry.name), { recursive: true, force: true });
     }
   } catch {
-    // Silently skip — cleanup is best-effort
+    // best-effort
   }
 }
 
@@ -36,8 +30,10 @@ export function installFromSkillsSh(
 
   for (const name of names) {
     try {
-      const cmd = `npx skills add "${repoUrl}" --skill "${name}" --copy -y 2>&1`;
-      execSync(cmd, { cwd: masterPath, stdio: 'inherit' });
+      execSync(`npx skills add "${repoUrl}" --skill "${name}" --copy -y`, {
+        cwd: masterPath,
+        stdio: 'pipe',
+      });
       cleanupAgentDirs(masterPath);
     } catch (err) {
       console.error(`Failed to install ${name}:`, String(err));
@@ -47,8 +43,10 @@ export function installFromSkillsSh(
 
   if (names.length === 0) {
     try {
-      const cmd = `npx skills add "${repoUrl}" --all --copy -y 2>&1`;
-      execSync(cmd, { cwd: masterPath, stdio: 'inherit' });
+      execSync(`npx skills add "${repoUrl}" --all --copy -y`, {
+        cwd: masterPath,
+        stdio: 'pipe',
+      });
       cleanupAgentDirs(masterPath);
     } catch (err) {
       console.error(`Failed to install from ${repoUrl}:`, String(err));
@@ -66,9 +64,9 @@ export function updateSkillsShSkills(
   if (skillNames && skillNames.length > 0) {
     for (const name of skillNames) {
       try {
-        execSync(`npx skills update "${name}" -y 2>&1`, {
+        execSync(`npx skills update "${name}" -y`, {
           cwd: masterPath,
-          stdio: 'inherit',
+          stdio: 'pipe',
         });
         cleanupAgentDirs(masterPath);
       } catch (err) {
@@ -77,9 +75,9 @@ export function updateSkillsShSkills(
     }
   } else {
     try {
-      execSync('npx skills update -y 2>&1', {
+      execSync('npx skills update -y', {
         cwd: masterPath,
-        stdio: 'inherit',
+        stdio: 'pipe',
       });
       cleanupAgentDirs(masterPath);
     } catch (err) {
