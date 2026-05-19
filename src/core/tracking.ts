@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, lstatSync } from 'node:fs';
 import { join } from 'node:path';
 import type { TrackingFile, TrackingEntry, SkillType } from '../types.js';
 
@@ -79,4 +79,36 @@ export function getLinkedTargets(masterPath: string, skillName: string): string[
 export function getSkillType(masterPath: string, skillName: string): SkillType | null {
   const tracking = readTracking(masterPath);
   return tracking.skills[skillName]?.type ?? null;
+}
+
+export function reconcileTracking(masterPath: string): { staleRemoved: number; skills: number } {
+  const tracking = readTracking(masterPath);
+  let staleRemoved = 0;
+
+  for (const [skillName, entry] of Object.entries(tracking.skills)) {
+    const validPaths = entry.linkedTo.filter((target) => {
+      const symlinkPath = join(target, '.agents', 'skills', skillName);
+      try {
+        const stat = lstatSync(symlinkPath);
+        return stat.isSymbolicLink();
+      } catch {
+        return false; // path doesn't exist or can't be accessed
+      }
+    });
+
+    if (validPaths.length < entry.linkedTo.length) {
+      staleRemoved += entry.linkedTo.length - validPaths.length;
+      if (validPaths.length > 0) {
+        tracking.skills[skillName] = { ...entry, linkedTo: validPaths };
+      } else {
+        delete tracking.skills[skillName];
+      }
+    }
+  }
+
+  if (staleRemoved > 0) {
+    writeTracking(masterPath, tracking);
+  }
+
+  return { staleRemoved, skills: Object.keys(tracking.skills).length };
 }

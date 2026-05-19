@@ -25,7 +25,7 @@ async function promptInstallFromSkillsSh(masterPath: string): Promise<string[]> 
   let skillNames: string[] = [];
 
   // Try to parse as full npx skills add command
-  const cmdMatch = input.match(/npx\s+skills\s+add\s+(https?:\/\/[\w./-]+|[\w-]+\/[\w-]+)(?:\s+--skill\s+([\w-]+(?:\s*,\s*[\w-]+)*))?/);
+  const cmdMatch = input.match(/npx\s+skills(?:@[\w.]+)?\s+add\s+(https?:\/\/[^\s]+|[\w.-]+\/[\w.-]+)(?:\s+--skill(?:=|\s+)([\w,-]+))?/);
   if (cmdMatch) {
     repoUrl = cmdMatch[1].trim();
     if (cmdMatch[2]) {
@@ -163,7 +163,7 @@ export async function installCommand(skillArgs: string[]): Promise<void> {
       const fullCmd = skillArgs.join(' ');
       // Match: npx skills add <repo>, npx skills@latest add <repo>, npx skills@<version> add <repo>
       const cmdMatch = fullCmd.match(
-        /npx\s+skills(?:@[\w.]+)?\s+add\s+(https?:\/\/[\w./-]+|[\w-]+\/[\w.-]+)(?:\s+--skill\s+([\w,-]+))?/,
+        /npx\s+skills(?:@[\w.]+)?\s+add\s+(https?:\/\/[^\s]+|[\w.-]+\/[\w.-]+)(?:\s+--skill(?:=|\s+)([\w,-]+))?/,
       );
 
       let repoUrl: string;
@@ -319,6 +319,13 @@ export async function installCommand(skillArgs: string[]): Promise<void> {
     return;
   }
 
+  // Re-read skills after all user input to resolve against latest master state
+  const freshAllSkills = getAllSkills(masterPath);
+  selectedSkills = selectedSkills.map(s => {
+    const fresh = freshAllSkills.find(f => f.name === s.name);
+    return fresh ?? s; // keep original if vanished (let processing error out)
+  });
+
   // 4. Process each skill
   const targetProject = process.cwd();
   const results: { name: string; ok: boolean; msg: string }[] = [];
@@ -379,7 +386,7 @@ export async function installCommand(skillArgs: string[]): Promise<void> {
         perSkillRollback.push(() => { try { removeSymlink(targetPath); } catch { /* best-effort */ } });
 
         // Git exclude — depends on config
-        const gitExclude = config.gitExclude ?? 'auto-ignore';
+        const gitExclude = updatedConfig.gitExclude ?? 'auto-ignore';
         if (gitExclude === 'auto-ignore') {
           addToGitExclude(targetProject, `.agents/skills/${skill.name}`);
           perSkillRollback.push(() => { try { removeFromGitExclude(targetProject, `.agents/skills/${skill.name}`); } catch { /* best-effort */ } });

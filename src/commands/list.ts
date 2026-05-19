@@ -4,7 +4,7 @@ import { existsSync, lstatSync } from 'node:fs';
 import { join } from 'node:path';
 import { readConfigWithDefaults } from '../core/config.js';
 import { getAllSkills } from '../core/master.js';
-import { readTracking } from '../core/tracking.js';
+import { readTracking, reconcileTracking } from '../core/tracking.js';
 import { detectProject } from '../utils/project.js';
 import type { SkillOption } from '../types.js';
 
@@ -38,6 +38,12 @@ export async function listCommand(): Promise<void> {
     p.log.error(`Master folder not found: ${masterPath}`);
     p.outro('Done.');
     return;
+  }
+
+  // Reconcile tracking vs reality before listing
+  const { staleRemoved } = reconcileTracking(masterPath);
+  if (staleRemoved > 0) {
+    p.log.info(`Cleaned up ${staleRemoved} stale tracking entr(ies).`);
   }
 
   const skills = getAllSkills(masterPath);

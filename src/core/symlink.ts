@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, lstatSync, writeFileSync, symlinkSync, unlinkSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 
 function getGitExcludePath(projectPath: string): string | null {
   const gitExclude = join(projectPath, '.git', 'info', 'exclude');
@@ -8,7 +8,7 @@ function getGitExcludePath(projectPath: string): string | null {
 }
 
 export function createSymlink(target: string, source: string): void {
-  const targetDir = target.substring(0, target.lastIndexOf('/'));
+  const targetDir = dirname(target);
   if (!existsSync(targetDir)) {
     mkdirSync(targetDir, { recursive: true });
   }
