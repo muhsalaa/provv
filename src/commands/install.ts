@@ -134,13 +134,16 @@ export async function installCommand(skillArgs: string[]): Promise<void> {
     return;
   }
 
-  // Guard: master is also a git repo. Don't install into it.
+  // Guard: warn if in master, but allow with confirmation
   if (process.cwd() === masterPath) {
-    p.log.warn('You are in the master folder.');
-    p.log.info('To install to a project, cd to the project directory first.');
-    p.log.step('Example: cd ~/code/my-project && prov install');
-    p.outro('Install cancelled.');
-    return;
+    const proceed = await confirmContinue(
+      'You are in the master folder. Skills will be downloaded to master/.agents/skills/ but NOT symlinked locally. Proceed?',
+      false,
+    );
+    if (!proceed) {
+      p.outro('Install cancelled.');
+      return;
+    }
   }
 
   // 3. Load skills
@@ -158,8 +161,9 @@ export async function installCommand(skillArgs: string[]): Promise<void> {
     if (isCommand) {
       // Parse the npx skills add command
       const fullCmd = skillArgs.join(' ');
+      // Match: npx skills add <repo>, npx skills@latest add <repo>, npx skills@<version> add <repo>
       const cmdMatch = fullCmd.match(
-        /npx\s+skills\s+add\s+(https?:\/\/[\w./-]+|[\w-]+\/[\w.-]+)(?:\s+--skill\s+([\w,-]+))?/,
+        /npx\s+skills(?:@[\w.]+)?\s+add\s+(https?:\/\/[\w./-]+|[\w-]+\/[\w.-]+)(?:\s+--skill\s+([\w,-]+))?/,
       );
 
       let repoUrl: string;
@@ -171,10 +175,47 @@ export async function installCommand(skillArgs: string[]): Promise<void> {
           skillNames = cmdMatch[2].split(/[\s,]+/).filter(Boolean);
         }
       } else {
-        // Treat as raw URL or repo
-        repoUrl = skillArgs[0];
-        if (skillArgs.length > 1 && skillArgs[1] !== '--skill') {
-          skillNames = skillArgs.slice(1).filter((a) => a !== '--skill');
+        // Treat as raw URL or repo — find the actual repo string in args
+        const urlCandidate = skillArgs.find(
+          (a) => a.startsWith('http') || /^[\w.-]+\/[\w.-]+$/.test(a),
+        );
+        if (urlCandidate) {
+          repoUrl = urlCandidate;
+          const skillIdx = skillArgs.indexOf('--skill');
+          if (skillIdx !== -1 && skillArgs[skillIdx + 1]) {
+            skillNames = [skillArgs[skillIdx + 1]];
+          }
+        } else {
+          p.log.error(`Could not parse repo URL from: ${fullCmd}`);
+          p.outro('Install cancelled.');
+          return;
+        }
+      }
+
+      if (skillNames.length === 0) {
+        // No --skill specified → show available skills and let user pick
+        p.log.info(`Available skills in ${repoUrl}:`);
+        try {
+          const { execSync } = await import('node:child_process');
+          execSync(`npx skills add "${repoUrl}" --list -y 2>&1`, {
+            cwd: masterPath,
+            stdio: 'inherit',
+          });
+        } catch {
+          // --list exits with non-zero, that's fine
+        }
+        const picked = await p.text({
+          message: 'Skill name(s) to install (comma-separated):',
+          placeholder: 'e.g., caveman, grill-me',
+        });
+        if (p.isCancel(picked)) return;
+        if (picked && typeof picked === 'string') {
+          skillNames = picked.split(/[\s,]+/).filter(Boolean);
+        }
+        if (skillNames.length === 0) {
+          p.log.warn('No skills selected.');
+          p.outro('Done.');
+          return;
         }
       }
 
@@ -310,30 +351,37 @@ export async function installCommand(skillArgs: string[]): Promise<void> {
         sourcePath = skillsShDir;
       }
 
-      // Symlink
-      const targetPath = join(targetProject, '.agents', 'skills', skill.name);
-      createSymlink(targetPath, sourcePath);
+      // When in master: download only, no self-symlink
+      const inMaster = targetProject === masterPath;
 
-      // Git exclude — depends on config
-      const gitExclude = config.gitExclude ?? 'auto-ignore';
-      if (gitExclude === 'auto-ignore') {
-        addToGitExclude(targetProject, `.agents/skills/${skill.name}`);
-      } else if (gitExclude === 'ask') {
-        const exclude = await confirmContinue(
-          `Ignore ${skill.name} symlink in git? (won't be committed)`,
-          true,
-        );
-        if (exclude) {
+      if (!inMaster) {
+        // Symlink
+        const targetPath = join(targetProject, '.agents', 'skills', skill.name);
+        createSymlink(targetPath, sourcePath);
+
+        // Git exclude — depends on config
+        const gitExclude = config.gitExclude ?? 'auto-ignore';
+        if (gitExclude === 'auto-ignore') {
           addToGitExclude(targetProject, `.agents/skills/${skill.name}`);
+        } else if (gitExclude === 'ask') {
+          const exclude = await confirmContinue(
+            `Ignore ${skill.name} symlink in git? (won't be committed)`,
+            true,
+          );
+          if (exclude) {
+            addToGitExclude(targetProject, `.agents/skills/${skill.name}`);
+          }
         }
+
+        // Track
+        addLink(masterPath, skill.name, targetProject, skill.type);
+
+        s.stop('Done');
+        results.push({ name: skill.name, ok: true, msg: 'Installed and linked' });
+      } else {
+        s.stop('Done');
+        results.push({ name: skill.name, ok: true, msg: 'Downloaded to master' });
       }
-      // gitExclude === 'never' → skip entirely
-
-      // Track
-      addLink(masterPath, skill.name, targetProject, skill.type);
-
-      s.stop('Done');
-      results.push({ name: skill.name, ok: true, msg: 'Installed and linked' });
     } catch (err) {
       s.stop('Error');
       results.push({ name: skill.name, ok: false, msg: String(err) });
