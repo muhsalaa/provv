@@ -14,8 +14,7 @@ function checkSymlinkHealth(targetDir: string, skillName: string): 'ok' | 'missi
     if (!existsSync(symlinkPath)) return 'missing';
     const stat = lstatSync(symlinkPath);
     if (!stat.isSymbolicLink()) return 'broken';
-    // Symlink exists but target might be gone
-    const target = symlinkPath; // lstatSync gives us the link, existsSync follows it
+    // Symlink exists but target might be gone (existsSync follows symlinks)
     if (!existsSync(symlinkPath)) return 'broken';
     return 'ok';
   } catch {

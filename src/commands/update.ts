@@ -50,12 +50,7 @@ export async function updateCommand(skillArgs: string[]): Promise<void> {
     });
     if (p.isCancel(picked)) return;
 
-    const pickedArr = picked as string[];
-    if (pickedArr.includes('__ALL__')) {
-      nameFilter = undefined;
-    } else {
-      nameFilter = pickedArr;
-    }
+    nameFilter = picked as string[];
   }
 
   if (nameFilter !== undefined && nameFilter.length === 0) {

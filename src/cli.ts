@@ -1,7 +1,12 @@
 #!/usr/bin/env node
 
 import * as p from '@clack/prompts';
+import { existsSync, readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
+
+const __dirname = join(dirname(fileURLToPath(import.meta.url)));
+const pkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf-8'));
 import { readConfig, writeConfig } from './core/config.js';
 import { initMaster } from './commands/init.js';
 import { installCommand } from './commands/install.js';
@@ -11,8 +16,7 @@ import { updateCommand } from './commands/update.js';
 import { listCommand } from './commands/list.js';
 import { masterCommand } from './commands/master-command.js';
 import { isMaster } from './core/master.js';
-import { existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { confirmContinue } from './utils/prompts.js';
 
 // --- Interactive main menu ---
@@ -101,7 +105,7 @@ async function showMainMenu(): Promise<void> {
 const program = new Command()
   .name('provv')
   .description('Agent skills provision manager — install, link, and manage AI agent skills')
-  .version('1.0.0');
+  .version(pkg.version);
 
 program
   .command('init')
