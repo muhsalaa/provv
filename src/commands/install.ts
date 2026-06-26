@@ -52,10 +52,15 @@ async function promptInstallFromSkillsSh(masterPath: string): Promise<string[]> 
   // Also ask for skill name if not provided and not parsed
   if (skillNames.length === 0) {
     const skill = await p.text({
-      message: "Skill name(s)? (comma-separated, or blank for all)",
+      message: "Skill name(s)? (comma-separated, or 'all' for everything)",
     });
     if (!p.isCancel(skill) && skill) {
-      skillNames = skill.split(/[\s,]+/).filter(Boolean);
+      const trimmed = skill.trim().toLowerCase();
+      if (trimmed === "all") {
+        skillNames = []; // empty → install all
+      } else {
+        skillNames = trimmed.split(/[\s,]+/).filter(Boolean);
+      }
     }
   }
 
@@ -199,27 +204,38 @@ export async function installCommand(skillArgs: string[]): Promise<void> {
         }
       }
 
-      if (skillNames.length === 0) {
-        // No --skill specified → show available skills and let user pick
-        p.log.info(`Available skills in ${repoUrl}:`);
-        try {
-          const { execSync } = await import("node:child_process");
-          execSync(`npx skills add "${repoUrl}" --list -y 2>&1`, {
-            cwd: masterPath,
-            stdio: "inherit",
-          });
-        } catch {
-          // --list exits with non-zero, that's fine
+      // If --skill all or --skill not specified, ask user
+      const installAll = skillNames.length === 1 && skillNames[0] === "all";
+      if (skillNames.length === 0 || installAll) {
+        if (!installAll) {
+          // Show available skills
+          p.log.info(`Available skills in ${repoUrl}:`);
+          try {
+            const { execSync } = await import("node:child_process");
+            execSync(`npx skills add "${repoUrl}" --list -y 2>&1`, {
+              cwd: masterPath,
+              stdio: "inherit",
+            });
+          } catch {
+            // --list exits with non-zero, that's fine
+          }
         }
         const picked = await p.text({
-          message: "Skill name(s) to install (comma-separated):",
-          placeholder: "e.g., caveman, grill-me",
+          message: installAll
+            ? "Confirm install ALL skills? (type 'all' or comma-separated names):"
+            : "Skill name(s) to install (comma-separated, or 'all' for everything):",
+          placeholder: installAll ? "all" : "e.g., caveman, grill-me — or 'all'",
         });
         if (p.isCancel(picked)) return;
         if (picked && typeof picked === "string") {
-          skillNames = picked.split(/[\s,]+/).filter(Boolean);
+          const trimmed = picked.trim().toLowerCase();
+          if (trimmed === "all") {
+            skillNames = []; // empty → installFromSkillsSh runs --all
+          } else {
+            skillNames = trimmed.split(/[\s,]+/).filter(Boolean);
+          }
         }
-        if (skillNames.length === 0) {
+        if (skillNames.length === 0 && picked !== "all") {
           p.log.warn("No skills selected.");
           p.outro("Done.");
           return;
