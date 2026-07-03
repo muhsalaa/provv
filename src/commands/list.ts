@@ -2,6 +2,7 @@ import * as p from '@clack/prompts';
 import pc from 'picocolors';
 import { existsSync, lstatSync } from 'node:fs';
 import { join } from 'node:path';
+import os from 'node:os';
 import { readConfigWithDefaults } from '../core/config.js';
 import { getAllSkills } from '../core/master.js';
 import { readTracking, reconcileTracking } from '../core/tracking.js';
@@ -107,7 +108,12 @@ export async function listCommand(): Promise<void> {
             `→ ⚠ ${elsewhereHealthy.length} ok, ${elsewhereBroken.length} broken`,
           );
         } else {
-          status = pc.dim(`→ linked to ${linkedElsewhere.length} project(s)`);
+          const globalCount = linkedElsewhere.filter((t) => t === os.homedir()).length;
+          const projectCount = linkedElsewhere.length - globalCount;
+          const parts: string[] = [];
+          if (globalCount > 0) parts.push('globally');
+          if (projectCount > 0) parts.push(`${projectCount} project(s)`);
+          status = pc.dim(`→ linked ${parts.join(' + ')}`);
         }
         console.log(`  ${formatSkillName(s)} ${status}`);
       }

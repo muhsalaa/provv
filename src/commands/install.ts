@@ -1,6 +1,7 @@
 import * as p from "@clack/prompts";
 import { join } from "node:path";
 import { existsSync } from "node:fs";
+import os from "node:os";
 import { readConfigWithDefaults, writeConfig } from "../core/config.js";
 import { getAllSkills } from "../core/master.js";
 import { addLink, removeLink, getLinkedTargets } from "../core/tracking.js";
@@ -86,7 +87,12 @@ async function promptInstallFromSkillsSh(masterPath: string): Promise<string[]> 
   return confirmNames.split(/[\s,]+/).filter(Boolean);
 }
 
-export async function installCommand(skillArgs: string[]): Promise<void> {
+export async function installCommand(
+  skillArgs: string[],
+  globalOpt = false,
+): Promise<void> {
+  // Filter out --global/-g if they leaked through (npx argv reconstruction)
+  skillArgs = skillArgs.filter((a) => a !== "--global" && a !== "-g");
   p.intro("Prov Install");
 
   // 1. Detect project
@@ -147,7 +153,7 @@ export async function installCommand(skillArgs: string[]): Promise<void> {
   }
 
   // Guard: warn if in master, but allow with confirmation
-  if (process.cwd() === masterPath) {
+  if (process.cwd() === masterPath && !globalOpt) {
     const proceed = await confirmContinue(
       "You are in the master folder. Skills will be downloaded to master/.agents/skills/ but NOT symlinked locally. Proceed?",
       false,
@@ -265,10 +271,11 @@ export async function installCommand(skillArgs: string[]): Promise<void> {
       }
     }
   } else {
+    const targetCheck = globalOpt ? os.homedir() : process.cwd();
     // Build options for multiselect
     const ownOptions = allSkills
       .filter(
-        (s) => s.type === "own" && !getLinkedTargets(masterPath, s.name).includes(process.cwd()),
+        (s) => s.type === "own" && !getLinkedTargets(masterPath, s.name).includes(targetCheck),
       )
       .map((s) => ({
         value: s.name,
@@ -279,7 +286,7 @@ export async function installCommand(skillArgs: string[]): Promise<void> {
 
       .filter(
         (s) =>
-          s.type === "skills.sh" && !getLinkedTargets(masterPath, s.name).includes(process.cwd()),
+          s.type === "skills.sh" && !getLinkedTargets(masterPath, s.name).includes(targetCheck),
       )
       .map((s) => ({
         value: s.name,
@@ -294,7 +301,8 @@ export async function installCommand(skillArgs: string[]): Promise<void> {
 
     if (options.length <= 1) {
       if (allSkills.length > 0) {
-        p.log.info("All skills already linked. Nothing to install.");
+        const linkLabel = globalOpt ? "globally" : "to this project";
+        p.log.info(`All skills already linked ${linkLabel}.`);
       } else {
         p.log.warn("No skills found in master. Add some first.");
       }
@@ -321,13 +329,14 @@ export async function installCommand(skillArgs: string[]): Promise<void> {
       const totalSkills = allSkills.length;
       const unlinkedCount = ownOptions.length + skillsShOptions.length;
 
+      const linkLabel = globalOpt ? "globally" : "to project";
       if (unlinkedCount < totalSkills) {
         p.log.info(
-          `Only showing not installed skills. (${totalSkills - unlinkedCount}) already linked`,
+          `Only showing not installed skills. (${totalSkills - unlinkedCount}) already linked ${linkLabel}`,
         );
       }
       const picked = await p.multiselect({
-        message: "Select skills to install and link:",
+        message: `Select skills to install ${linkLabel}:`,
         options,
         required: false,
       });
@@ -361,7 +370,7 @@ export async function installCommand(skillArgs: string[]): Promise<void> {
   });
 
   // 4. Process each skill
-  const targetProject = process.cwd();
+  const targetProject = globalOpt ? os.homedir() : process.cwd();
   const results: { name: string; ok: boolean; msg: string }[] = [];
   // Track committed skills so we can roll them back on any failure
   const committed: { name: string; undo: () => void }[] = [];
@@ -435,8 +444,9 @@ export async function installCommand(skillArgs: string[]): Promise<void> {
         }
       }
 
-      // When in master: download only, no self-symlink
-      const inMaster = targetProject === masterPath;
+      // When installing into master dir itself: download only, skip self-symlink
+      // For global mode (targetProject = homedir): always symlink to ~/.agents/skills/
+      const inMaster = !globalOpt && targetProject === masterPath;
 
       if (!inMaster) {
         // Symlink
@@ -450,8 +460,8 @@ export async function installCommand(skillArgs: string[]): Promise<void> {
           }
         });
 
-        // Git exclude — depends on config
-        const gitExclude = updatedConfig.gitExclude ?? "auto-ignore";
+        // Git exclude — depends on config (skip for global installs)
+        const gitExclude = globalOpt ? "never" : (updatedConfig.gitExclude ?? "auto-ignore");
         if (gitExclude === "auto-ignore") {
           if (!addToGitExclude(targetProject, `.agents/skills/${skill.name}`)) {
             p.log.warn(`Could not git-ignore ${skill.name} — no .git/info/exclude found`);

@@ -116,18 +116,22 @@ program
   .command('install [skills...]')
   .description('Install skill(s) to master and link to current project')
   .usage('[skill...] | npx skills add <url> --skill <name>')
+  .option('-g, --global', 'Install globally to ~/.agents/skills/ for all agents')
   .allowUnknownOption()
-  .action(async (skills: string[]) => {
+  .action(async (skills: string[], options: { global?: boolean }) => {
     // Recover full args from process.argv when npx command is passed
     // (allowUnknownOption consumes --flags, so we reconstruct from argv)
     let fullArgs = skills ?? [];
+    let globalOpt = options.global ?? false;
     if (fullArgs[0] === 'npx') {
       const idx = process.argv.indexOf('install');
       if (idx !== -1) {
         fullArgs = process.argv.slice(idx + 1);
+        // Re-detect --global from raw args (may appear before npx)
+        globalOpt = fullArgs.includes('--global') || fullArgs.includes('-g');
       }
     }
-    await installCommand(fullArgs);
+    await installCommand(fullArgs, globalOpt);
   });
 
 program
