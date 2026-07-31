@@ -8,7 +8,6 @@ export default defineConfig({
     dir: 'dist',
     entryFileNames: 'cli.js',
   },
-  external: [/node_modules/],
   resolve: {
     conditionNames: ['import', 'require', 'node'],
   },
