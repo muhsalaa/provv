@@ -135,6 +135,11 @@ export async function installCommand(
         p.outro("Install cancelled.");
         return;
       }
+      if (!pathResult) {
+        p.log.warn("No path provided. Aborting setup.");
+        p.outro("Install cancelled.");
+        return;
+      }
       const resolved = (pathResult as string).startsWith("/")
         ? (pathResult as string)
         : join(process.cwd(), pathResult as string);
