@@ -6,6 +6,7 @@ import { readConfigWithDefaults, writeConfig } from "../core/config.js";
 import { getAllSkills } from "../core/master.js";
 import { addLink, removeLink, getLinkedTargets } from "../core/tracking.js";
 import { readLockfile } from "../core/lockfile.js";
+import { getSkillSource } from "../core/lockfile.js";
 import {
   createSymlink,
   removeSymlink,
@@ -340,23 +341,42 @@ export async function installCommand(
           `Only showing not installed skills. (${totalSkills - unlinkedCount}) already linked ${linkLabel}`,
         );
       }
-      const picked = await p.multiselect({
+
+      // Group skills by source repo (nested + per-group "check all")
+      const grouped: Record<string, { value: string; label: string; hint?: string }[]> = {};
+      const installNewOption = { value: "__INSTALL_NEW__", label: "➜ Install new from skills.sh..." };
+
+      const ownGroup = ownOptions.map((o) => ({ value: o.value, label: o.label }));
+      if (ownGroup.length > 0) {
+        grouped["My own skills"] = ownGroup;
+      }
+
+      // group skills.sh by source repo
+      for (const s of skillsShOptions) {
+        const skill = allSkills.find((x) => x.name === s.value);
+        const source = skill ? getSkillSource(masterPath, skill.name) : "skills.sh";
+        if (!grouped[source]) grouped[source] = [];
+        grouped[source].push({ value: s.value, label: s.label });
+      }
+
+      const picked = await p.groupMultiselect({
         message: `Select skills to install ${linkLabel}:`,
-        options,
+        options: grouped,
         required: false,
       });
       if (p.isCancel(picked)) return;
 
-      if (picked.includes("__INSTALL_NEW__")) {
+      // __INSTALL_NEW__ handled separately (not part of a repo group)
+      const pickedValues = picked as string[];
+      if (pickedValues.includes("__INSTALL_NEW__")) {
         const installedNames = await promptInstallFromSkillsSh(masterPath);
-        // Add those to selection
         const updatedSkills = getAllSkills(masterPath);
         const newlyInstalled = updatedSkills.filter((s) => installedNames.includes(s.name));
         selectedSkills = allSkills
-          .filter((s) => (picked as string[]).includes(s.name))
+          .filter((s) => pickedValues.includes(s.name))
           .concat(newlyInstalled);
       } else {
-        selectedSkills = allSkills.filter((s) => (picked as string[]).includes(s.name));
+        selectedSkills = allSkills.filter((s) => pickedValues.includes(s.name));
       }
     }
   }

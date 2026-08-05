@@ -71,4 +71,34 @@ describe('lockfile', () => {
     const { removeSkillFromLockfile } = await import('../../src/core/lockfile.js');
     expect(removeSkillFromLockfile(tmpDir, 'x')).toBe(false);
   });
+
+  it('getSkillSource extracts owner/repo from full URL', async () => {
+    const { addSkillToLockfile, getSkillSource } = await import('../../src/core/lockfile.js');
+    addSkillToLockfile(tmpDir, 's1', {
+      source: 'https://github.com/vercel-labs/skills.git?branch=main',
+      sourceType: 'github',
+      computedHash: '',
+    });
+    expect(getSkillSource(tmpDir, 's1')).toBe('vercel-labs/skills');
+  });
+
+  it('getSkillSource passes through owner/repo shorthand', async () => {
+    const { addSkillToLockfile, getSkillSource } = await import('../../src/core/lockfile.js');
+    addSkillToLockfile(tmpDir, 's2', {
+      source: 'anthropics/skills',
+      sourceType: 'github',
+      computedHash: '',
+    });
+    expect(getSkillSource(tmpDir, 's2')).toBe('anthropics/skills');
+  });
+
+  it('getSkillSource falls back for missing source', async () => {
+    const { addSkillToLockfile, getSkillSource } = await import('../../src/core/lockfile.js');
+    addSkillToLockfile(tmpDir, 's3', {
+      source: '',
+      sourceType: 'github',
+      computedHash: '',
+    });
+    expect(getSkillSource(tmpDir, 's3')).toBe('skills.sh');
+  });
 });

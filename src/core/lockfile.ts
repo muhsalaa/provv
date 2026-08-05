@@ -44,3 +44,24 @@ export function addSkillToLockfile(
   lockfile.skills[skillName] = entry;
   writeLockfile(masterPath, lockfile);
 }
+
+/**
+ * Human-friendly display name for a skill's source repo.
+ * Extracts owner/repo from a GitHub URL or `owner/repo` shorthand.
+ * Falls back to the raw source, or 'skills.sh' if unknown.
+ */
+export function getSkillSource(masterPath: string, skillName: string): string {
+  const lockfile = readLockfile(masterPath);
+  const source = lockfile?.skills[skillName]?.source;
+  if (!source) return 'skills.sh';
+
+  // GitHub URL: https://github.com/owner/repo[.git][?params]
+  const gh = source.match(/github\.com\/([^/?#]+)\/([^/?#]+)/);
+  if (gh) return `${gh[1]}/${gh[2].replace(/\.git$/, '')}`;
+
+  // owner/repo shorthand
+  const short = source.match(/^([\w.-]+\/[\w.-]+)/);
+  if (short) return short[1];
+
+  return source;
+}
