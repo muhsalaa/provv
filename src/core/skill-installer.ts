@@ -11,6 +11,19 @@ function cleanupAgentDirs(masterPath: string): void {
       if (entry.name === '.git' || entry.name === '.agents') continue;
       rmSync(join(masterPath, entry.name), { recursive: true, force: true });
     }
+
+    // npx skills add --copy also dumps skill trees into skills/ (own-skills
+    // folder). Remove any skills/ dir that is a skills.sh skill (in lockfile)
+    // — keeps own skills (not in lockfile) untouched.
+    const lockfile = readLockfile(masterPath);
+    if (lockfile) {
+      const skillsDir = join(masterPath, 'skills');
+      if (existsSync(skillsDir)) {
+        for (const name of Object.keys(lockfile.skills)) {
+          rmSync(join(skillsDir, name), { recursive: true, force: true });
+        }
+      }
+    }
   } catch {
     // best-effort
   }
