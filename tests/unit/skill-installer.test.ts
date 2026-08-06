@@ -54,12 +54,11 @@ describe('installFromSkillsSh', () => {
     expect(result).toBe(false);
   });
 
-  it('installs multiple skills separately', async () => {
+  it('installs multiple skills in one --all batch', async () => {
     const { installFromSkillsSh } = await loadInstaller();
     installFromSkillsSh(masterDir, 'user/repo', ['alpha', 'beta']);
-    expect(mockExecSync).toHaveBeenCalledTimes(2);
-    expect(mockExecSync.mock.calls[0][0]).toContain('"alpha"');
-    expect(mockExecSync.mock.calls[1][0]).toContain('"beta"');
+    expect(mockExecSync).toHaveBeenCalledTimes(1);
+    expect(mockExecSync.mock.calls[0][0]).toContain('--all');
   });
 
   it('installs all skills when names array is empty', async () => {
@@ -77,15 +76,12 @@ describe('installFromSkillsSh', () => {
     expect(result).toBe(false);
   });
 
-  it('continues installing remaining skills after one failure', async () => {
-    mockExecSync
-      .mockImplementationOnce(() => Buffer.from('')) // first succeeds
-      .mockImplementationOnce(() => { throw new Error('fail'); }) // second fails
-      .mockImplementationOnce(() => Buffer.from('')); // third succeeds
+  it('returns false when batch --all install fails', async () => {
+    mockExecSync.mockImplementation(() => { throw new Error('network error'); });
     const { installFromSkillsSh } = await loadInstaller();
-    const result = installFromSkillsSh(masterDir, 'user/repo', ['a', 'b', 'c']);
-    expect(result).toBe(false); // overall failure
-    expect(mockExecSync).toHaveBeenCalledTimes(3); // all tried
+    const result = installFromSkillsSh(masterDir, 'user/repo', ['a', 'b']);
+    expect(result).toBe(false);
+    expect(mockExecSync).toHaveBeenCalledTimes(1);
   });
 
   it('creates .agents/skills dir if missing', async () => {

@@ -29,6 +29,36 @@ export function installFromSkillsSh(
   const names = skillNames.length > 0 ? skillNames : [];
   let success = true;
 
+  // Batch: many skills from same repo → one `--all` call (2s vs 2s×N)
+  // ponytail: threshold 2 — single skills still use --skill for precision
+  if (names.length >= 2) {
+    try {
+      execSync(`npx skills add "${repoUrl}" --all --copy -y`, {
+        cwd: masterPath,
+        stdio: 'pipe',
+        timeout: 120_000,
+      });
+      cleanupAgentDirs(masterPath);
+
+      // Verify each requested skill landed in lockfile
+      const lockfile = readLockfile(masterPath);
+      for (const name of names) {
+        if (!lockfile || !lockfile.skills[name]) {
+          console.warn(`⚠ ${name}: lockfile entry missing after install — adding stub`);
+          addSkillToLockfile(masterPath, name, {
+            source: repoUrl,
+            sourceType: 'skills.sh',
+            computedHash: '',
+          });
+        }
+      }
+    } catch (err) {
+      console.error(`Failed to install from ${repoUrl}:`, String(err));
+      return false;
+    }
+    return true;
+  }
+
   for (const name of names) {
     try {
       execSync(`npx skills add "${repoUrl}" --skill "${name}" --copy -y`, {

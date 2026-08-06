@@ -94,6 +94,7 @@ export async function installCommand(
 ): Promise<void> {
   // Filter out --global/-g if they leaked through (npx argv reconstruction)
   skillArgs = skillArgs.filter((a) => a !== "--global" && a !== "-g");
+  const installCommandStart = Date.now();
   p.intro("Prov Install");
 
   // 1. Detect project
@@ -219,43 +220,79 @@ export async function installCommand(
       // If --skill all or --skill not specified, ask user
       const installAll = skillNames.length === 1 && skillNames[0] === "all";
       if (skillNames.length === 0 || installAll) {
-        if (!installAll) {
-          // Show available skills
-          p.log.info(`Available skills in ${repoUrl}:`);
-          try {
-            const { execSync } = await import("node:child_process");
-            execSync(`npx skills add "${repoUrl}" --list -y 2>&1`, {
-              cwd: masterPath,
-              stdio: "inherit",
-            });
-          } catch {
-            // --list exits with non-zero, that's fine
-          }
+        // Show available skills + let user pick via checkboxes
+        const { execSync } = await import("node:child_process");
+        let listOut = "";
+        try {
+          listOut = execSync(`npx skills add "${repoUrl}" --list -y 2>&1`, {
+            cwd: masterPath,
+            encoding: "utf8",
+            stdio: "pipe",
+          });
+        } catch {
+          // --list exits with non-zero, that's fine — may still have output
         }
-        const picked = await p.text({
-          message: installAll
-            ? "Confirm install ALL skills? (type 'all' or comma-separated names):"
-            : "Skill name(s) to install (comma-separated, or 'all' for everything):",
-          placeholder: installAll ? "all" : "e.g., caveman, grill-me — or 'all'",
-        });
-        if (p.isCancel(picked)) return;
-        if (picked && typeof picked === "string") {
-          const trimmed = picked.trim().toLowerCase();
-          if (trimmed === "all") {
-            skillNames = []; // empty → installFromSkillsSh runs --all
+
+        // Parse skill names from list output: lines "│    <name>"
+        // Strip ANSI color codes first (npx skills colors its output)
+        const plainOut = listOut.replace(/\x1b\[[0-9;]*m/g, "");
+        const available = [...plainOut.matchAll(/│\s+([a-z0-9][a-z0-9-]*)\s*$/gm)].map((m) => m[1]);
+
+        if (available.length > 0) {
+          const picked = await p.groupMultiselect({
+            message: installAll
+              ? `Install skills from ${repoUrl} (preselected all — uncheck to exclude):`
+              : `Select skills to install from ${repoUrl}:`,
+            options: {
+              "All skills": available.map((name) => ({ value: name, label: name })),
+            },
+            initialValues: installAll ? available : undefined,
+            required: false,
+          });
+          if (p.isCancel(picked)) return;
+          const pickedNames = picked as string[];
+          if (installAll) {
+            // All were preselected. Explicit uncheck of everything = cancel.
+            if (pickedNames.length === 0) {
+              p.log.warn("No skills selected — install cancelled.");
+              p.outro("Done.");
+              return;
+            }
+            // If any unchecked, install only the kept ones; if all kept → install all
+            skillNames = pickedNames.length === available.length ? [] : pickedNames;
           } else {
-            skillNames = trimmed.split(/[\s,]+/).filter(Boolean);
+            skillNames = pickedNames;
+            if (skillNames.length === 0) {
+              p.log.warn("No skills selected.");
+              p.outro("Done.");
+              return;
+            }
           }
-        }
-        if (skillNames.length === 0 && picked !== "all") {
-          p.log.warn("No skills selected.");
-          p.outro("Done.");
-          return;
+        } else {
+          // Fallback: could not parse list — ask by name
+          const picked = await p.text({
+            message: "Skill name(s) to install (comma-separated, or 'all' for everything):",
+            placeholder: "e.g., caveman, grill-me — or 'all'",
+          });
+          if (p.isCancel(picked)) return;
+          if (picked && typeof picked === "string") {
+            const trimmed = picked.trim().toLowerCase();
+            if (trimmed === "all") {
+              skillNames = []; // empty → installFromSkillsSh runs --all
+            } else {
+              skillNames = trimmed.split(/[\s,]+/).filter(Boolean);
+            }
+          }
+          if (skillNames.length === 0 && picked !== "all") {
+            p.log.warn("No skills selected.");
+            p.outro("Done.");
+            return;
+          }
         }
       }
 
       p.log.info(`Installing from ${repoUrl}...`);
-      installFromSkillsSh(masterPath, repoUrl, skillNames);
+      const installOk = installFromSkillsSh(masterPath, repoUrl, skillNames);
 
       // Re-load and filter to installed skills
       const updatedSkills = getAllSkills(masterPath);
@@ -263,6 +300,14 @@ export async function installCommand(
         skillNames.length > 0
           ? updatedSkills.filter((s) => skillNames.includes(s.name))
           : updatedSkills.filter((s) => s.type === "skills.sh");
+
+      if (!installOk || selectedSkills.length === 0) {
+        // Nothing actually installed — report failure, don't say "Installed"
+        const wanted = skillNames.length > 0 ? skillNames : ["all"];
+        p.log.error(`Install from ${repoUrl} failed — requested: ${wanted.join(", ")}`);
+        p.outro("Install failed.");
+        return;
+      }
     } else {
       // Match against known skills
       selectedSkills = allSkills.filter((s) => skillArgs.includes(s.name));
@@ -401,10 +446,8 @@ export async function installCommand(
   const committed: { name: string; undo: () => void }[] = [];
 
   for (const skill of selectedSkills) {
-    const s = p.spinner();
-    s.start(`Processing ${skill.name}...`);
-
-    // Per-skill rollback stack — completed operations to undo if this skill fails
+    // No per-skill spinner — silent loop, compact report at end.
+    // ponytail: failures still report individually below.
     const perSkillRollback: (() => void)[] = [];
 
     try {
@@ -416,7 +459,6 @@ export async function installCommand(
         // skills.sh
         const skillsShDir = join(masterPath, ".agents", "skills", skill.name);
         if (!existsSync(skillsShDir)) {
-          s.stop(`Downloading ${skill.name}...`);
           // Lazy sync
           const lockfile = readLockfile(masterPath);
           const entry = lockfile?.skills[skill.name];
@@ -424,7 +466,6 @@ export async function installCommand(
             const ok = installFromSkillsSh(masterPath, entry.source, [skill.name]);
             if (!ok) {
               results.push({ name: skill.name, ok: false, msg: "Download failed" });
-              s.stop("Failed");
               // Rollback already-committed skills
               for (const c of committed.slice().reverse()) {
                 try {
@@ -437,7 +478,6 @@ export async function installCommand(
             }
           } else {
             results.push({ name: skill.name, ok: false, msg: "Source not found in lockfile" });
-            s.stop("Failed");
             // Rollback already-committed skills
             for (const c of committed.slice().reverse()) {
               try {
@@ -457,7 +497,6 @@ export async function installCommand(
             ok: false,
             msg: "Skill directory missing after download",
           });
-          s.stop("Failed");
           for (const c of committed.slice().reverse()) {
             try {
               c.undo();
@@ -535,10 +574,8 @@ export async function installCommand(
           },
         });
 
-        s.stop("Done");
         results.push({ name: skill.name, ok: true, msg: "Installed and linked" });
       } else {
-        s.stop("Done");
         results.push({ name: skill.name, ok: true, msg: "Downloaded to master" });
       }
     } catch (err) {
@@ -558,23 +595,25 @@ export async function installCommand(
           /* best-effort */
         }
       }
-      s.stop("Error");
       results.push({ name: skill.name, ok: false, msg: String(err) });
       break; // Stop — state is clean, user can retry
     }
   }
 
-  // 5. Report
-  const ok = results.filter((r) => r.ok).length;
-  const fail = results.filter((r) => !r.ok).length;
-  p.log.success(`${ok} skill(s) installed.${fail > 0 ? ` ${fail} failed.` : ""}`);
+  // 5. Report — compact: names comma-separated + total time
+  const okSkills = results.filter((r) => r.ok);
+  const failSkills = results.filter((r) => !r.ok);
+  const totalSec = ((Date.now() - installCommandStart) / 1000).toFixed(1);
 
-  for (const r of results) {
-    if (r.ok) {
-      p.log.success(`  ✓ ${r.name}: ${r.msg}`);
-    } else {
-      p.log.error(`  ✗ ${r.name}: ${r.msg}`);
-    }
+  if (okSkills.length > 0) {
+    p.log.success(
+      `✓ ${okSkills.map((r) => r.name).join(", ")} — installed in ${totalSec}s${failSkills.length > 0 ? `, ${failSkills.length} failed` : ""}`,
+    );
+  } else {
+    p.log.error(`No skills installed${failSkills.length > 0 ? ` — ${failSkills.length} failed` : ""}`);
+  }
+  for (const r of failSkills) {
+    p.log.error(`  ✗ ${r.name}: ${r.msg}`);
   }
 
   p.outro("Install complete.");
