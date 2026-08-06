@@ -2,10 +2,7 @@
 
 All notable changes to provv are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are [SemVer](https://semver.org/).
 
-## [1.4.1] - 2026-08-06
-
-### Added
-- _Nothing yet — describe the next release here._
+## [Unreleased]
 
 ## [1.4.0] - 2026-08-06
 
