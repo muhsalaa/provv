@@ -4,6 +4,11 @@ All notable changes to provv are documented here. Format follows [Keep a Changel
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-08-06
+
+### Fixed
+- `npx skills add --copy` no longer pollutes the own-skills `skills/` folder with skills.sh copies. `cleanupAgentDirs` now removes `skills/<name>` for every skill in the lockfile, keeping own skills untouched.
+
 ## [1.4.0] - 2026-08-06
 
 ### Added
